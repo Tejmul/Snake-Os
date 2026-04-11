@@ -4,11 +4,12 @@
 #include "screen.h"
 #include "string.h"
 
+#include <unistd.h>
+
 #define BOARD_WIDTH 40
 #define BOARD_HEIGHT 20
 #define SCORE_X 2
 #define SCORE_Y 1
-#define FRAME_DELAY_SPIN 2500000
 
 typedef struct Snake {
     int x;
@@ -18,12 +19,7 @@ typedef struct Snake {
 
 static void delay_one_tick(void)
 {
-    volatile int i;
-
-    i = 0;
-    while (i < FRAME_DELAY_SPIN) {
-        i++;
-    }
+	usleep(100000);
 }
 
 static void update_direction(Snake *snake, char key)
@@ -70,6 +66,9 @@ static void move_snake(Snake *snake)
 int main(void)
 {
     Snake *snake;
+    int running;
+    int old_x;
+    int old_y;
 
     memory_init();
     keyboard_init();
@@ -82,23 +81,46 @@ int main(void)
     snake->x = BOARD_WIDTH / 2;
     snake->y = BOARD_HEIGHT / 2;
     snake->direction = 'D';
+    running = 1;
+    old_x = snake->x;
+    old_y = snake->y;
 
-    while (1) {
+    screen_clear();
+    screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
+    screen_draw_string(SCORE_X, SCORE_Y, "SCORE: 0");
+    screen_draw_char(snake->x, snake->y, '@');
+    screen_move_cursor(1, BOARD_HEIGHT + 1);
+    screen_present();
+
+    while (running) {
         char key;
 
         if (key_pressed()) {
             key = read_key();
+            if (key == 'q' || key == 'Q') {
+                running = 0;
+            }
             update_direction(snake, key);
         }
 
+        if (!running) {
+            break;
+        }
+
+        old_x = snake->x;
+        old_y = snake->y;
         move_snake(snake);
 
-        screen_clear();
-        screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
-        screen_draw_string(SCORE_X, SCORE_Y, "SCORE: 0");
+        if (old_x != snake->x || old_y != snake->y) {
+            screen_draw_char(old_x, old_y, ' ');
+        }
         screen_draw_char(snake->x, snake->y, '@');
         screen_move_cursor(1, BOARD_HEIGHT + 1);
+        screen_present();
 
         delay_one_tick();
     }
+
+    keyboard_restore();
+    return 0;
 }

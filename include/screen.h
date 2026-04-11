@@ -16,4 +16,7 @@ void screen_draw_string(int x, int y, const char *s);
 /* Draws a rectangular border using '#' characters. */
 void screen_draw_border(int width, int height);
 
+/* Flushes pending terminal output for the current frame. */
+void screen_present(void);
+
 #endif /* SNAKE_OS_SCREEN_H */

@@ -84,3 +84,9 @@ void screen_draw_border(int width, int height)
 		y++;
 	}
 }
+
+/* Flushes pending terminal output for the current frame. */
+void screen_present(void)
+{
+	fflush(stdout);
+}
