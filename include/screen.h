@@ -1,0 +1,19 @@
+#ifndef SNAKE_OS_SCREEN_H
+#define SNAKE_OS_SCREEN_H
+
+/* Clears the terminal using ANSI escape codes. */
+void screen_clear(void);
+
+/* Moves the cursor to column x and row y using ANSI escape codes. */
+void screen_move_cursor(int x, int y);
+
+/* Draws one character at the given screen position. */
+void screen_draw_char(int x, int y, char c);
+
+/* Draws a null-terminated string at the given screen position. */
+void screen_draw_string(int x, int y, const char *s);
+
+/* Draws a rectangular border using '#' characters. */
+void screen_draw_border(int width, int height);
+
+#endif /* SNAKE_OS_SCREEN_H */
