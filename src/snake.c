@@ -135,36 +135,49 @@ static Food *g_food = 0;
 /* Global game state flags. */
 static int game_over = 0;
 static int score = 0;
+static int foods_eaten = 0;
 
-static void draw_score_row(int width, int score)
+/* Adds points to the global score. */
+static void score_add(int points)
+{
+    score += points;
+}
+
+/*
+ * Draws the top score bar showing "SCORE: X  LENGTH: Y".
+ * Uses my_int_to_str() and my_strcpy() from string.c only — no printf("%d").
+ */
+static void score_draw(void)
 {
     int x;
-    char score_num[16];
-    char score_text[32];
-    const char *label;
-    int label_len;
-    int num_len;
+    int len;
+    char buf[40];
+    char num[16];
 
-    label = "SCORE: ";
-    label_len = my_strlen(label);
-
-    my_int_to_str(score, score_num);
-    num_len = my_strlen(score_num);
-
-    my_strcpy(score_text, label);
-    my_strcpy(score_text + label_len, score_num);
-    score_text[label_len + num_len] = '\0';
-
+    /* Step 1: clear the score row (between borders). */
     screen_draw_char(1, SCORE_ROW, '#');
-    screen_draw_char(width, SCORE_ROW, '#');
+    screen_draw_char(BOARD_WIDTH, SCORE_ROW, '#');
 
     x = 2;
-    while (x <= width - 1) {
+    while (x <= BOARD_WIDTH - 1) {
         screen_draw_char(x, SCORE_ROW, ' ');
         x++;
     }
 
-    screen_draw_string(3, SCORE_ROW, score_text);
+    /* Step 2: build "SCORE: <n>" using manual string concat. */
+    my_strcpy(buf, "SCORE: ");
+    my_int_to_str(score, num);
+    my_strcpy(buf + my_strlen(buf), num);
+
+    /* Step 3: append "  LENGTH: <n>" to the same buffer. */
+    len = my_strlen(buf);
+    my_strcpy(buf + len, "  LENGTH: ");
+    len = my_strlen(buf);
+    my_int_to_str(snake_length + 1, num);
+    my_strcpy(buf + len, num);
+
+    /* Step 4: draw the combined string on the score row. */
+    screen_draw_string(3, SCORE_ROW, buf);
 }
 
 /*
@@ -237,14 +250,15 @@ static int hits_food(int x, int y, Food *f)
 }
 
 /*
- * Handles food eating: grows the snake, respawns food, and increments score.
+ * Handles food eating: grows the snake, respawns food, and adds 10 to score.
  */
 static void food_eat(void)
 {
-    score += 1;
+    score_add(10);
+    foods_eaten += 1;
     g_food->active = 0;
     food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
-    draw_score_row(BOARD_WIDTH, score);
+    score_draw();
     screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
 }
 
@@ -345,11 +359,12 @@ int main(void)
     old_y = snake->y;
     game_over = 0;
     score = 0;
+    foods_eaten = 0;
     food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
 
     screen_clear();
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
-	draw_score_row(BOARD_WIDTH, score);
+    score_draw();
     screen_draw_char(snake->x, snake->y, '@');
     screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
     screen_move_cursor(1, BOARD_HEIGHT + 1);
@@ -381,8 +396,8 @@ int main(void)
             /* Step 1: old head becomes the newest tail segment. */
             tail_push_front(old_x, old_y);
 
-            /* Step 2: remember score before collision check. */
-            old_score = score;
+            /* Step 2: remember food count before collision check. */
+            old_score = foods_eaten;
 
             /* Step 3: check all collisions using math.c functions. */
             check_all_collisions(snake->x, snake->y, g_food,
@@ -393,8 +408,8 @@ int main(void)
             }
 
             /* Step 4: trim tail if no food was eaten. */
-            if (score == old_score) {
-                while (snake_length > score) {
+            if (foods_eaten == old_score) {
+                while (snake_length > foods_eaten) {
                     tail_pop_back();
                 }
             }
@@ -409,6 +424,10 @@ int main(void)
         if (!running) {
             break;
         }
+
+        /* Survival bonus: +1 score per tick. */
+        score_add(1);
+        score_draw();
 
         g_tick++;
         delay_one_tick();
