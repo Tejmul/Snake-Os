@@ -1,5 +1,4 @@
 #include "keyboard.h"
-#include "math.h"
 #include "memory.h"
 #include "screen.h"
 #include "string.h"
@@ -176,24 +175,46 @@ static void draw_score_row(int width, int score)
     screen_draw_string(3, SCORE_ROW, score_text);
 }
 
-static void place_food(Food *food, const Snake *snake)
+/* Returns 1 if a free cell was found, 0 if the board has no empty cell. */
+static int place_food(Food *food, const Snake *snake)
 {
     int x;
     int y;
+    int tries;
+    int total;
 
-    while (1) {
+    total = (PLAY_MAX_X - PLAY_MIN_X + 1) * (PLAY_MAX_Y - PLAY_MIN_Y + 1);
+
+    tries = 0;
+    while (tries < total) {
+        tries += 1;
         x = (int)(next_rand() % (unsigned int)(PLAY_MAX_X - PLAY_MIN_X + 1)) + PLAY_MIN_X;
         y = (int)(next_rand() % (unsigned int)(PLAY_MAX_Y - PLAY_MIN_Y + 1)) + PLAY_MIN_Y;
 
-        /* Avoid spawning on the head or any tail segment. */
         if ((x == snake->x && y == snake->y) || tail_collides(x, y)) {
             continue;
         }
 
         food->x = x;
         food->y = y;
-        return;
+        return 1;
     }
+
+    y = PLAY_MIN_Y;
+    while (y <= PLAY_MAX_Y) {
+        x = PLAY_MIN_X;
+        while (x <= PLAY_MAX_X) {
+            if ((x != snake->x || y != snake->y) && !tail_collides(x, y)) {
+                food->x = x;
+                food->y = y;
+                return 1;
+            }
+            x += 1;
+        }
+        y += 1;
+    }
+
+    return 0;
 }
 
 static void delay_one_tick(void)
@@ -220,26 +241,38 @@ static void update_direction(Snake *snake, char key)
     }
 }
 
-static void move_snake(Snake *snake)
+/* Returns 0 if the next step would leave the play area (game over). */
+static int move_snake(Snake *snake)
 {
+    int nx;
+    int ny;
+
+    nx = snake->x;
+    ny = snake->y;
+
     if (snake->direction == 'W') {
-        snake->y -= 1;
+        ny -= 1;
     }
 
     if (snake->direction == 'A') {
-        snake->x -= 1;
+        nx -= 1;
     }
 
     if (snake->direction == 'S') {
-        snake->y += 1;
+        ny += 1;
     }
 
     if (snake->direction == 'D') {
-        snake->x += 1;
+        nx += 1;
     }
 
-	snake->x = my_clamp(snake->x, PLAY_MIN_X, PLAY_MAX_X);
-	snake->y = my_clamp(snake->y, PLAY_MIN_Y, PLAY_MAX_Y);
+    if (nx < PLAY_MIN_X || nx > PLAY_MAX_X || ny < PLAY_MIN_Y || ny > PLAY_MAX_Y) {
+        return 0;
+    }
+
+    snake->x = nx;
+    snake->y = ny;
+    return 1;
 }
 
 int main(void)
@@ -267,7 +300,11 @@ int main(void)
     old_x = snake->x;
     old_y = snake->y;
 	score = 0;
-	place_food(&food, snake);
+	if (!place_food(&food, snake)) {
+		my_dealloc((void *)snake);
+		keyboard_restore();
+		return 1;
+	}
 
     screen_clear();
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
@@ -294,7 +331,9 @@ int main(void)
 
         old_x = snake->x;
         old_y = snake->y;
-        move_snake(snake);
+        if (!move_snake(snake)) {
+            running = 0;
+        }
 
         /* Only update tail when the head actually moved. */
         if (old_x != snake->x || old_y != snake->y) {
@@ -304,9 +343,12 @@ int main(void)
             if (snake->x == food.x && snake->y == food.y) {
                 score += 1;
                 ate = 1;
-                place_food(&food, snake);
                 draw_score_row(BOARD_WIDTH, score);
-                screen_draw_char(food.x, food.y, FOOD_CHAR);
+                if (!place_food(&food, snake)) {
+                    running = 0;
+                } else {
+                    screen_draw_char(food.x, food.y, FOOD_CHAR);
+                }
             }
 
             /* Step 1: old head becomes the newest tail segment. */
@@ -331,6 +373,10 @@ int main(void)
         screen_move_cursor(1, BOARD_HEIGHT + 1);
         screen_present();
 
+        if (!running) {
+            break;
+        }
+
         delay_one_tick();
     }
 
@@ -339,6 +385,7 @@ int main(void)
         tail_pop_back();
     }
 
+    my_dealloc((void *)snake);
     keyboard_restore();
     return 0;
 }
