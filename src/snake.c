@@ -117,7 +117,6 @@ int tail_collides(int x, int y)
 typedef struct Snake {
     int x;
     int y;
-    char direction;
 } Snake;
 
 typedef struct Food {
@@ -136,6 +135,13 @@ static Food *g_food = 0;
 static int game_over = 0;
 static int score = 0;
 static int foods_eaten = 0;
+
+/* Direction vectors for snake movement. */
+static int dir_x = 1;
+static int dir_y = 0;
+
+/* Flag set by food_eat() when food is consumed; cleared after tail update. */
+static int just_ate = 0;
 
 /* Adds points to the global score. */
 static void score_add(int points)
@@ -256,10 +262,9 @@ static void food_eat(void)
 {
     score_add(10);
     foods_eaten += 1;
+    just_ate = 1;
     g_food->active = 0;
     food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
-    score_draw();
-    screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
 }
 
 /*
@@ -284,56 +289,56 @@ static void check_all_collisions(int x, int y, Food *f, int board_w, int board_h
     }
 }
 
-static void delay_one_tick(void)
+/*
+ * Updates snake direction from keyboard input.
+ * Prevents reverse direction using my_abs(): if new + old cancel to zero, block it.
+ */
+static void update_direction(char key)
 {
-	usleep(100000);
-}
+    int new_dx;
+    int new_dy;
 
-static void update_direction(Snake *snake, char key)
-{
+    new_dx = 0;
+    new_dy = 0;
+
     if (key == 'w' || key == 'W') {
-        snake->direction = 'W';
+        new_dx = 0;
+        new_dy = -1;
     }
 
     if (key == 'a' || key == 'A') {
-        snake->direction = 'A';
+        new_dx = -1;
+        new_dy = 0;
     }
 
     if (key == 's' || key == 'S') {
-        snake->direction = 'S';
+        new_dx = 0;
+        new_dy = 1;
     }
 
     if (key == 'd' || key == 'D') {
-        snake->direction = 'D';
-    }
-}
-
-/* Moves the snake one step in its current direction. */
-static void move_snake(Snake *snake)
-{
-    if (snake->direction == 'W') {
-        snake->y -= 1;
+        new_dx = 1;
+        new_dy = 0;
     }
 
-    if (snake->direction == 'A') {
-        snake->x -= 1;
+    /* Ignore if no valid direction key was pressed. */
+    if (new_dx == 0 && new_dy == 0) {
+        return;
     }
 
-    if (snake->direction == 'S') {
-        snake->y += 1;
+    /* Block reverse direction using my_abs() from math.c. */
+    if (my_abs(new_dx + dir_x) == 0 && my_abs(new_dy + dir_y) == 0) {
+        return;
     }
 
-    if (snake->direction == 'D') {
-        snake->x += 1;
-    }
+    dir_x = new_dx;
+    dir_y = new_dy;
 }
 
 int main(void)
 {
     Snake *snake;
     int running;
-    int old_x;
-    int old_y;
 
     memory_init();
     keyboard_init();
@@ -353,84 +358,83 @@ int main(void)
 
     snake->x = BOARD_WIDTH / 2;
     snake->y = BOARD_HEIGHT / 2;
-    snake->direction = 'D';
     running = 1;
-    old_x = snake->x;
-    old_y = snake->y;
+    dir_x = 1;
+    dir_y = 0;
+    just_ate = 0;
     game_over = 0;
     score = 0;
     foods_eaten = 0;
     food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
 
+    /* Initial render. */
     screen_clear();
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
-    score_draw();
+    tail_draw();
+    if (g_food->active) {
+        screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
+    }
     screen_draw_char(snake->x, snake->y, '@');
-    screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
+    score_draw();
     screen_move_cursor(1, BOARD_HEIGHT + 1);
     screen_present();
 
     while (running) {
-        char key;
+        int nx;
+        int ny;
 
+        g_tick++;
+
+        /* 1. Input: read key and update direction (blocks reverse). */
         if (key_pressed()) {
+            char key;
+
             key = read_key();
             if (key == 'q' || key == 'Q') {
                 running = 0;
+                break;
             }
-            update_direction(snake, key);
+            update_direction(key);
         }
 
-        if (!running) {
+        /* 2. Calculate next head position using direction vectors. */
+        nx = snake->x + dir_x;
+        ny = snake->y + dir_y;
+
+        /* 3. Collision checks (Prompt 12) — before moving. */
+        check_all_collisions(nx, ny, g_food, BOARD_WIDTH, BOARD_HEIGHT);
+        if (game_over) {
+            running = 0;
             break;
         }
 
-        old_x = snake->x;
-        old_y = snake->y;
-        move_snake(snake);
-
-        /* Only update tail when the head actually moved. */
-        if (old_x != snake->x || old_y != snake->y) {
-            int old_score;
-
-            /* Step 1: old head becomes the newest tail segment. */
-            tail_push_front(old_x, old_y);
-
-            /* Step 2: remember food count before collision check. */
-            old_score = foods_eaten;
-
-            /* Step 3: check all collisions using math.c functions. */
-            check_all_collisions(snake->x, snake->y, g_food,
-                                 BOARD_WIDTH, BOARD_HEIGHT);
-
-            if (game_over) {
-                running = 0;
-            }
-
-            /* Step 4: trim tail if no food was eaten. */
-            if (foods_eaten == old_score) {
-                while (snake_length > foods_eaten) {
-                    tail_pop_back();
-                }
+        /* 4. Move snake: old head becomes tail, update head position. */
+        tail_push_front(snake->x, snake->y);
+        snake->x = nx;
+        snake->y = ny;
+        if (!just_ate) {
+            while (snake_length > foods_eaten) {
+                tail_pop_back();
             }
         }
+        just_ate = 0;
 
-        /* Redraw tail (segments) and then the head. */
+        /* 5. Survival bonus: +1 score per tick. */
+        score_add(1);
+
+        /* 6. Render: clear -> border -> tail -> food -> head -> score. */
+        screen_clear();
+        screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
         tail_draw();
+        if (g_food->active) {
+            screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
+        }
         screen_draw_char(snake->x, snake->y, '@');
+        score_draw();
         screen_move_cursor(1, BOARD_HEIGHT + 1);
         screen_present();
 
-        if (!running) {
-            break;
-        }
-
-        /* Survival bonus: +1 score per tick. */
-        score_add(1);
-        score_draw();
-
-        g_tick++;
-        delay_one_tick();
+        usleep(120000);
     }
 
     /* Free any remaining tail segments before exit (true runtime free). */
