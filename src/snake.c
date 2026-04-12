@@ -132,6 +132,10 @@ static int g_tick = 0;
 /* Global food pointer, heap-allocated via my_alloc(). */
 static Food *g_food = 0;
 
+/* Global game state flags. */
+static int game_over = 0;
+static int score = 0;
+
 static void draw_score_row(int width, int score)
 {
     int x;
@@ -190,6 +194,82 @@ static void food_spawn(int board_w, int board_h)
     }
 }
 
+/*
+ * Returns 1 if (x, y) is outside the playable area.
+ * Uses my_clamp() from math.c: if clamping changes the value, it was out of bounds.
+ */
+static int hits_wall(int x, int y, int board_w, int board_h)
+{
+    int cx;
+    int cy;
+
+    cx = my_clamp(x, PLAY_MIN_X, board_w - 1);
+    cy = my_clamp(y, PLAY_MIN_Y, board_h - 1);
+
+    /* If clamped value differs from original, the position was outside. */
+    if (my_abs(cx - x) != 0 || my_abs(cy - y) != 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/*
+ * Returns 1 if the snake head overlaps any tail segment.
+ * Delegates to tail_collides() from the tail linked-list implementation.
+ */
+static int hits_self(int x, int y)
+{
+    return tail_collides(x, y);
+}
+
+/*
+ * Returns 1 if position (x, y) matches the food position.
+ * Uses my_abs() from math.c instead of direct == comparison.
+ */
+static int hits_food(int x, int y, Food *f)
+{
+    if (my_abs(x - f->x) == 0 && my_abs(y - f->y) == 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/*
+ * Handles food eating: grows the snake, respawns food, and increments score.
+ */
+static void food_eat(void)
+{
+    score += 1;
+    g_food->active = 0;
+    food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
+    draw_score_row(BOARD_WIDTH, score);
+    screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
+}
+
+/*
+ * Checks all collision types and updates game state accordingly.
+ * Sets game_over = 1 on wall or self collision.
+ * Calls food_eat() if the snake head is on food.
+ */
+static void check_all_collisions(int x, int y, Food *f, int board_w, int board_h)
+{
+    if (hits_wall(x, y, board_w, board_h)) {
+        game_over = 1;
+        return;
+    }
+
+    if (hits_self(x, y)) {
+        game_over = 1;
+        return;
+    }
+
+    if (f->active && hits_food(x, y, f)) {
+        food_eat();
+    }
+}
+
 static void delay_one_tick(void)
 {
 	usleep(100000);
@@ -214,38 +294,24 @@ static void update_direction(Snake *snake, char key)
     }
 }
 
-/* Returns 0 if the next step would leave the play area (game over). */
-static int move_snake(Snake *snake)
+/* Moves the snake one step in its current direction. */
+static void move_snake(Snake *snake)
 {
-    int nx;
-    int ny;
-
-    nx = snake->x;
-    ny = snake->y;
-
     if (snake->direction == 'W') {
-        ny -= 1;
+        snake->y -= 1;
     }
 
     if (snake->direction == 'A') {
-        nx -= 1;
+        snake->x -= 1;
     }
 
     if (snake->direction == 'S') {
-        ny += 1;
+        snake->y += 1;
     }
 
     if (snake->direction == 'D') {
-        nx += 1;
+        snake->x += 1;
     }
-
-    if (nx < PLAY_MIN_X || nx > PLAY_MAX_X || ny < PLAY_MIN_Y || ny > PLAY_MAX_Y) {
-        return 0;
-    }
-
-    snake->x = nx;
-    snake->y = ny;
-    return 1;
 }
 
 int main(void)
@@ -254,7 +320,6 @@ int main(void)
     int running;
     int old_x;
     int old_y;
-    int score;
 
     memory_init();
     keyboard_init();
@@ -278,6 +343,7 @@ int main(void)
     running = 1;
     old_x = snake->x;
     old_y = snake->y;
+    game_over = 0;
     score = 0;
     food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
 
@@ -306,37 +372,31 @@ int main(void)
 
         old_x = snake->x;
         old_y = snake->y;
-        if (!move_snake(snake)) {
-            running = 0;
-        }
+        move_snake(snake);
 
         /* Only update tail when the head actually moved. */
         if (old_x != snake->x || old_y != snake->y) {
-            int ate;
-
-            ate = 0;
-            if (g_food->active && snake->x == g_food->x && snake->y == g_food->y) {
-                score += 1;
-                ate = 1;
-                g_food->active = 0;
-                food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
-                draw_score_row(BOARD_WIDTH, score);
-                screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
-            }
+            int old_score;
 
             /* Step 1: old head becomes the newest tail segment. */
             tail_push_front(old_x, old_y);
 
-            /* Step 2: keep tail length equal to score (grow by 1 per food). */
-            if (!ate) {
+            /* Step 2: remember score before collision check. */
+            old_score = score;
+
+            /* Step 3: check all collisions using math.c functions. */
+            check_all_collisions(snake->x, snake->y, g_food,
+                                 BOARD_WIDTH, BOARD_HEIGHT);
+
+            if (game_over) {
+                running = 0;
+            }
+
+            /* Step 4: trim tail if no food was eaten. */
+            if (score == old_score) {
                 while (snake_length > score) {
                     tail_pop_back();
                 }
-            }
-
-            /* Step 3: collision check after tail update (allows stepping into old tail-end). */
-            if (tail_collides(snake->x, snake->y)) {
-                running = 0;
             }
         }
 
