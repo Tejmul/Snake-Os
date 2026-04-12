@@ -1,10 +1,10 @@
 #include "keyboard.h"
+#include "math.h"
 #include "memory.h"
 #include "screen.h"
 #include "string.h"
 
 #include <unistd.h>
-#include <time.h>
 
 #define BOARD_WIDTH 40
 #define BOARD_HEIGHT 20
@@ -123,26 +123,14 @@ typedef struct Snake {
 typedef struct Food {
     int x;
     int y;
+    int active;
 } Food;
 
-static unsigned int g_rng_state = 1U;
+/* Global tick counter used as pseudo-random seed for food placement. */
+static int g_tick = 0;
 
-static unsigned int next_rand(void)
-{
-    g_rng_state = g_rng_state * 1103515245U + 12345U;
-    return g_rng_state;
-}
-
-static void seed_rng(void)
-{
-    unsigned int seed;
-
-    seed = (unsigned int)time(0);
-    if (seed == 0U) {
-        seed = 1U;
-    }
-    g_rng_state = seed;
-}
+/* Global food pointer, heap-allocated via my_alloc(). */
+static Food *g_food = 0;
 
 static void draw_score_row(int width, int score)
 {
@@ -175,46 +163,31 @@ static void draw_score_row(int width, int score)
     screen_draw_string(3, SCORE_ROW, score_text);
 }
 
-/* Returns 1 if a free cell was found, 0 if the board has no empty cell. */
-static int place_food(Food *food, const Snake *snake)
+/*
+ * Spawns food at a pseudo-random position using a tick-based formula.
+ * Uses my_mod() from math.c — no rand() or srand() allowed.
+ * Retries with an incremented tick if the position overlaps any snake segment.
+ */
+static void food_spawn(int board_w, int board_h)
 {
     int x;
     int y;
-    int tries;
-    int total;
 
-    total = (PLAY_MAX_X - PLAY_MIN_X + 1) * (PLAY_MAX_Y - PLAY_MIN_Y + 1);
+    while (1) {
+        g_tick++;
+        x = my_mod(g_tick * 37 + 17, board_w - 2) + 1;
+        y = my_mod(g_tick * 53 + 11, board_h - 2) + 1;
 
-    tries = 0;
-    while (tries < total) {
-        tries += 1;
-        x = (int)(next_rand() % (unsigned int)(PLAY_MAX_X - PLAY_MIN_X + 1)) + PLAY_MIN_X;
-        y = (int)(next_rand() % (unsigned int)(PLAY_MAX_Y - PLAY_MIN_Y + 1)) + PLAY_MIN_Y;
-
-        if ((x == snake->x && y == snake->y) || tail_collides(x, y)) {
+        /* Make sure food does not spawn on the snake using tail_collides(). */
+        if (tail_collides(x, y)) {
             continue;
         }
 
-        food->x = x;
-        food->y = y;
-        return 1;
+        g_food->x = x;
+        g_food->y = y;
+        g_food->active = 1;
+        return;
     }
-
-    y = PLAY_MIN_Y;
-    while (y <= PLAY_MAX_Y) {
-        x = PLAY_MIN_X;
-        while (x <= PLAY_MAX_X) {
-            if ((x != snake->x || y != snake->y) && !tail_collides(x, y)) {
-                food->x = x;
-                food->y = y;
-                return 1;
-            }
-            x += 1;
-        }
-        y += 1;
-    }
-
-    return 0;
 }
 
 static void delay_one_tick(void)
@@ -278,20 +251,26 @@ static int move_snake(Snake *snake)
 int main(void)
 {
     Snake *snake;
-    Food food;
     int running;
     int old_x;
     int old_y;
-	int score;
+    int score;
 
     memory_init();
     keyboard_init();
-	seed_rng();
 
     snake = (Snake *)my_alloc((int)sizeof(Snake));
     if (snake == 0) {
         return 1;
     }
+
+    /* Allocate Food with my_alloc() at game start. */
+    g_food = (Food *)my_alloc((int)sizeof(Food));
+    if (g_food == 0) {
+        my_dealloc((void *)snake);
+        return 1;
+    }
+    g_food->active = 0;
 
     snake->x = BOARD_WIDTH / 2;
     snake->y = BOARD_HEIGHT / 2;
@@ -299,18 +278,14 @@ int main(void)
     running = 1;
     old_x = snake->x;
     old_y = snake->y;
-	score = 0;
-	if (!place_food(&food, snake)) {
-		my_dealloc((void *)snake);
-		keyboard_restore();
-		return 1;
-	}
+    score = 0;
+    food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
 
     screen_clear();
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
 	draw_score_row(BOARD_WIDTH, score);
     screen_draw_char(snake->x, snake->y, '@');
-	screen_draw_char(food.x, food.y, FOOD_CHAR);
+    screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
     screen_move_cursor(1, BOARD_HEIGHT + 1);
     screen_present();
 
@@ -340,15 +315,13 @@ int main(void)
             int ate;
 
             ate = 0;
-            if (snake->x == food.x && snake->y == food.y) {
+            if (g_food->active && snake->x == g_food->x && snake->y == g_food->y) {
                 score += 1;
                 ate = 1;
+                g_food->active = 0;
+                food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
                 draw_score_row(BOARD_WIDTH, score);
-                if (!place_food(&food, snake)) {
-                    running = 0;
-                } else {
-                    screen_draw_char(food.x, food.y, FOOD_CHAR);
-                }
+                screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
             }
 
             /* Step 1: old head becomes the newest tail segment. */
@@ -377,6 +350,7 @@ int main(void)
             break;
         }
 
+        g_tick++;
         delay_one_tick();
     }
 
@@ -385,6 +359,8 @@ int main(void)
         tail_pop_back();
     }
 
+    /* Deallocate Food with my_dealloc() on game over. */
+    my_dealloc((void *)g_food);
     my_dealloc((void *)snake);
     keyboard_restore();
     return 0;
