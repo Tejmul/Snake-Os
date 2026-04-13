@@ -136,6 +136,9 @@ static int game_over = 0;
 static int score = 0;
 static int foods_eaten = 0;
 
+/* Global snake pointer so food_spawn can check the head position. */
+static Snake *g_snake = 0;
+
 /* Direction vectors for snake movement. */
 static int dir_x = 1;
 static int dir_y = 0;
@@ -195,13 +198,21 @@ static void food_spawn(int board_w, int board_h)
 {
     int x;
     int y;
+    int range_x;
+    int range_y;
+
+    range_x = PLAY_MAX_X - PLAY_MIN_X + 1;
+    range_y = PLAY_MAX_Y - PLAY_MIN_Y + 1;
 
     while (1) {
         g_tick++;
-        x = my_mod(g_tick * 37 + 17, board_w - 2) + 1;
-        y = my_mod(g_tick * 53 + 11, board_h - 2) + 1;
+        x = my_mod(g_tick * 37 + 17, range_x) + PLAY_MIN_X;
+        y = my_mod(g_tick * 53 + 11, range_y) + PLAY_MIN_Y;
 
-        /* Make sure food does not spawn on the snake using tail_collides(). */
+        /* Make sure food does not spawn on the snake head or any tail segment. */
+        if (g_snake != 0 && my_abs(x - g_snake->x) == 0 && my_abs(y - g_snake->y) == 0) {
+            continue;
+        }
         if (tail_collides(x, y)) {
             continue;
         }
@@ -347,6 +358,7 @@ int main(void)
     if (snake == 0) {
         return 1;
     }
+    g_snake = snake;
 
     /* Allocate Food with my_alloc() at game start. */
     g_food = (Food *)my_alloc((int)sizeof(Food));
