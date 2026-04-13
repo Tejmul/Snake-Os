@@ -25,7 +25,7 @@ void my_strcpy(char *dst, const char *src)
 	*dst = '\0';
 }
 
-/* Compares two strings similarly to strcmp. */
+/* Lexicographic compare of two C strings (libc-style). */
 int my_strcmp(const char *a, const char *b)
 {
 	while (*a != '\0' && *b != '\0' && *a == *b) {

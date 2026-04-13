@@ -57,7 +57,7 @@ void tail_pop_back(void)
     Segment *prev;
     Segment *cur;
 
-    /* Step 1: empty list => nothing to pop. */
+    /* Step 1: empty list => nothing to pop (and nothing to free). */
     if (snake_head == 0) {
         return;
     }
@@ -75,6 +75,9 @@ void tail_pop_back(void)
     /* Step 3: walk to the last node, keeping track of the previous. */
     prev = snake_head;
     cur = snake_head->next;
+    if (cur == 0) {
+        return;
+    }
     while (cur->next != 0) {
         prev = cur;
         cur = cur->next;
@@ -103,13 +106,19 @@ void tail_draw(void)
 int tail_collides(int x, int y)
 {
     Segment *cur;
+    Segment *next;
+
+    if (snake_head == 0) {
+        return 0;
+    }
 
     cur = snake_head;
     while (cur != 0) {
         if (cur->x == x && cur->y == y) {
             return 1;
         }
-        cur = cur->next;
+        next = cur->next;
+        cur = next;
     }
 
     return 0;
@@ -156,13 +165,13 @@ static void score_add(int points)
 /*
  * Tick delay in microseconds: faster as score rises (math.c only for scaling).
  */
-static int get_delay(int score)
+static int get_delay(int total_score)
 {
     int steps;
     int reduction;
     int delay;
 
-    steps = my_div(score, 50);
+    steps = my_div(total_score, 50);
     reduction = my_mul(steps, 10000);
     delay = 150000 - reduction;
     return my_clamp(delay, 60000, 150000);
@@ -170,7 +179,7 @@ static int get_delay(int score)
 
 /*
  * Draws the top score bar showing "SCORE: X  LENGTH: Y  SPEED: Z".
- * Uses my_int_to_str() and my_strcpy() from string.c only — no printf("%d").
+ * Uses my_int_to_str() and my_strcpy() from string.c only — no formatted int printing.
  */
 static void score_draw(void)
 {
@@ -220,7 +229,7 @@ static void score_draw(void)
 
 /*
  * Spawns food at a pseudo-random position using a tick-based formula.
- * Uses my_mod() from math.c — no rand() or srand() allowed.
+ * Uses my_mod() from math.c — no standard library RNG.
  * Retries with an incremented tick if the position overlaps any snake segment.
  */
 static void food_spawn(int board_w, int board_h)
@@ -229,14 +238,27 @@ static void food_spawn(int board_w, int board_h)
     int y;
     int range_x;
     int range_y;
+    int max_cells;
+    int attempts;
 
-    range_x = PLAY_MAX_X - PLAY_MIN_X + 1;
-    range_y = PLAY_MAX_Y - PLAY_MIN_Y + 1;
+    if (g_food == 0) {
+        return;
+    }
 
-    while (1) {
+    range_x = (board_w - 1) - PLAY_MIN_X + 1;
+    range_y = (board_h - 1) - PLAY_MIN_Y + 1;
+    if (range_x <= 0 || range_y <= 0) {
+        g_food->active = 0;
+        return;
+    }
+
+    max_cells = my_mul(range_x, range_y);
+    attempts = 0;
+    while (attempts < max_cells) {
         g_tick++;
         x = my_mod(g_tick * 37 + 17, range_x) + PLAY_MIN_X;
         y = my_mod(g_tick * 53 + 11, range_y) + PLAY_MIN_Y;
+        attempts++;
 
         /* Make sure food does not spawn on the snake head or any tail segment. */
         if (g_snake != 0 && my_abs(x - g_snake->x) == 0 && my_abs(y - g_snake->y) == 0) {
@@ -251,6 +273,9 @@ static void food_spawn(int board_w, int board_h)
         g_food->active = 1;
         return;
     }
+
+    /* Board full of snake — no free cell for food. */
+    g_food->active = 0;
 }
 
 /*
@@ -288,6 +313,10 @@ static int hits_self(int x, int y)
  */
 static int hits_food(int x, int y, Food *f)
 {
+    if (f == 0) {
+        return 0;
+    }
+
     if (my_abs(x - f->x) == 0 && my_abs(y - f->y) == 0) {
         return 1;
     }
@@ -300,6 +329,10 @@ static int hits_food(int x, int y, Food *f)
  */
 static void food_eat(void)
 {
+    if (g_food == 0) {
+        return;
+    }
+
     score_add(10);
     foods_eaten += 1;
     just_ate = 1;
@@ -324,22 +357,18 @@ static void check_all_collisions(int x, int y, Food *f, int board_w, int board_h
         return;
     }
 
-    if (f->active && hits_food(x, y, f)) {
+    if (f != 0 && f->active && hits_food(x, y, f)) {
         food_eat();
     }
 }
 
 /*
- * Frees every tail segment with my_dealloc(), then food and snake, and resets
- * the allocator. Reallocates snake and food, resets globals, and spawns a
- * starting snake in the board center with snake_length == 3 tail segments
- * (foods_eaten kept in sync so the trim loop does not shrink the starter tail).
+ * Frees all Segment nodes, Food, and Snake from VRAM (matches every my_alloc).
  */
-void game_reset(void)
+static void game_free_allocations(void)
 {
     Segment *cur;
     Segment *next;
-    int k;
 
     cur = snake_head;
     while (cur != 0) {
@@ -359,6 +388,18 @@ void game_reset(void)
         my_dealloc((void *)g_snake);
         g_snake = 0;
     }
+}
+
+/*
+ * Frees every allocation, resets the allocator, then reallocates snake and food.
+ * Spawns a starting snake in the board center with up to three tail segments;
+ * foods_eaten matches actual tail length so the trim loop stays consistent.
+ */
+void game_reset(void)
+{
+    int k;
+
+    game_free_allocations();
 
     memory_init();
 
@@ -385,7 +426,6 @@ void game_reset(void)
     just_ate = 0;
     game_over = 0;
     score = 0;
-    foods_eaten = 3;
     g_tick = 0;
 
     /* Three tail cells behind the head, opposite movement direction. */
@@ -394,6 +434,7 @@ void game_reset(void)
         tail_push_front(g_snake->x - k * dir_x, g_snake->y - k * dir_y);
         k--;
     }
+    foods_eaten = snake_length;
 
     food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
 
@@ -498,6 +539,7 @@ void show_game_over(void)
     lx = box_x + 1 + (inner_w - my_strlen(line4)) / 2;
     screen_draw_string(lx, y, line4);
 
+    memory_dump();
     screen_move_cursor(1, BOARD_HEIGHT + 1);
     screen_present();
 }
@@ -510,6 +552,10 @@ static void update_direction(char key)
 {
     int new_dx;
     int new_dy;
+
+    if (key == 0) {
+        return;
+    }
 
     new_dx = 0;
     new_dy = 0;
@@ -557,6 +603,10 @@ static int game_loop(void)
     int running;
     int nx;
     int ny;
+
+    if (g_snake == 0 || g_food == 0) {
+        return 1;
+    }
 
     running = 1;
 
@@ -661,21 +711,14 @@ int main(void)
             }
 
             if (key == 'q' || key == 'Q') {
+                game_free_allocations();
                 keyboard_restore();
                 exit(0);
             }
         }
     }
 
-    /* Free any remaining tail segments before exit (true runtime free). */
-    while (snake_head != 0) {
-        tail_pop_back();
-    }
-
-    my_dealloc((void *)g_food);
-    g_food = 0;
-    my_dealloc((void *)g_snake);
-    g_snake = 0;
+    game_free_allocations();
     keyboard_restore();
     return 0;
 }

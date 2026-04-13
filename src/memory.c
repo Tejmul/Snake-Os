@@ -5,7 +5,7 @@
 
 /*
  * NOTE:
- * - No malloc/free is used anywhere.
+ * - No libc heap allocation is used anywhere.
  * - All allocations live inside the global VRAM[8192] byte array.
  * - Every block begins with a tiny header: { int size; int is_free; }
  */
