@@ -4,6 +4,7 @@
 #include "screen.h"
 #include "string.h"
 
+#include <stdlib.h>
 #include <unistd.h>
 
 #define BOARD_WIDTH 40
@@ -301,6 +302,179 @@ static void check_all_collisions(int x, int y, Food *f, int board_w, int board_h
 }
 
 /*
+ * Frees every tail segment with my_dealloc(), then food and snake, and resets
+ * the allocator. Reallocates snake and food, resets globals, and spawns a
+ * starting snake in the board center with snake_length == 3 tail segments
+ * (foods_eaten kept in sync so the trim loop does not shrink the starter tail).
+ */
+void game_reset(void)
+{
+    Segment *cur;
+    Segment *next;
+    int k;
+
+    cur = snake_head;
+    while (cur != 0) {
+        next = cur->next;
+        my_dealloc((void *)cur);
+        cur = next;
+    }
+    snake_head = 0;
+    snake_length = 0;
+
+    if (g_food != 0) {
+        my_dealloc((void *)g_food);
+        g_food = 0;
+    }
+
+    if (g_snake != 0) {
+        my_dealloc((void *)g_snake);
+        g_snake = 0;
+    }
+
+    memory_init();
+
+    g_snake = (Snake *)my_alloc((int)sizeof(Snake));
+    if (g_snake == 0) {
+        keyboard_restore();
+        exit(1);
+    }
+
+    g_food = (Food *)my_alloc((int)sizeof(Food));
+    if (g_food == 0) {
+        my_dealloc((void *)g_snake);
+        g_snake = 0;
+        keyboard_restore();
+        exit(1);
+    }
+
+    g_food->active = 0;
+
+    g_snake->x = BOARD_WIDTH / 2;
+    g_snake->y = BOARD_HEIGHT / 2;
+    dir_x = 1;
+    dir_y = 0;
+    just_ate = 0;
+    game_over = 0;
+    score = 0;
+    foods_eaten = 3;
+    g_tick = 0;
+
+    /* Three tail cells behind the head, opposite movement direction. */
+    k = 3;
+    while (k >= 1) {
+        tail_push_front(g_snake->x - k * dir_x, g_snake->y - k * dir_y);
+        k--;
+    }
+
+    food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
+
+    memory_dump();
+}
+
+/*
+ * Draws a centered frame and game-over text using screen_draw_string() and
+ * my_int_to_str() for numeric fields.
+ */
+void show_game_over(void)
+{
+    char line0[32];
+    char line1[40];
+    char line2[40];
+    char line3[32];
+    char line4[32];
+    char num[16];
+    int maxw;
+    int box_x;
+    int box_y;
+    int box_h;
+    int inner_w;
+    int i;
+    int y;
+    int lx;
+
+    my_strcpy(line0, "  GAME OVER  ");
+
+    my_strcpy(line1, "  SCORE: ");
+    my_int_to_str(score, num);
+    my_strcpy(line1 + my_strlen(line1), num);
+    my_strcpy(line1 + my_strlen(line1), " ");
+
+    my_strcpy(line2, "  LENGTH: ");
+    my_int_to_str(snake_length + 1, num);
+    my_strcpy(line2 + my_strlen(line2), num);
+    my_strcpy(line2 + my_strlen(line2), " ");
+
+    my_strcpy(line3, " [R] Restart ");
+    my_strcpy(line4, " [Q]  Quit   ");
+
+    maxw = my_strlen(line0);
+    i = my_strlen(line1);
+    if (i > maxw) {
+        maxw = i;
+    }
+    i = my_strlen(line2);
+    if (i > maxw) {
+        maxw = i;
+    }
+    i = my_strlen(line3);
+    if (i > maxw) {
+        maxw = i;
+    }
+    i = my_strlen(line4);
+    if (i > maxw) {
+        maxw = i;
+    }
+
+    inner_w = maxw;
+    box_h = 2 + 5;
+    box_x = (BOARD_WIDTH - (inner_w + 2)) / 2 + 1;
+    box_y = (BOARD_HEIGHT - box_h) / 2 + 1;
+    if (box_x < 2) {
+        box_x = 2;
+    }
+    if (box_y < 2) {
+        box_y = 2;
+    }
+
+    screen_clear();
+    screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
+
+    i = 0;
+    while (i < inner_w + 2) {
+        screen_draw_char(box_x + i, box_y, '#');
+        screen_draw_char(box_x + i, box_y + box_h - 1, '#');
+        i++;
+    }
+
+    i = 1;
+    while (i < box_h - 1) {
+        screen_draw_char(box_x, box_y + i, '#');
+        screen_draw_char(box_x + inner_w + 1, box_y + i, '#');
+        i++;
+    }
+
+    y = box_y + 1;
+    lx = box_x + 1 + (inner_w - my_strlen(line0)) / 2;
+    screen_draw_string(lx, y, line0);
+    y++;
+    lx = box_x + 1 + (inner_w - my_strlen(line1)) / 2;
+    screen_draw_string(lx, y, line1);
+    y++;
+    lx = box_x + 1 + (inner_w - my_strlen(line2)) / 2;
+    screen_draw_string(lx, y, line2);
+    y++;
+    lx = box_x + 1 + (inner_w - my_strlen(line3)) / 2;
+    screen_draw_string(lx, y, line3);
+    y++;
+    lx = box_x + 1 + (inner_w - my_strlen(line4)) / 2;
+    screen_draw_string(lx, y, line4);
+
+    screen_move_cursor(1, BOARD_HEIGHT + 1);
+    screen_present();
+}
+
+/*
  * Updates snake direction from keyboard input.
  * Prevents reverse direction using my_abs(): if new + old cancel to zero, block it.
  */
@@ -346,55 +520,31 @@ static void update_direction(char key)
     dir_y = new_dy;
 }
 
-int main(void)
+/*
+ * Runs the main tick loop until game_over or the player quits with Q.
+ * Returns 0 if the player quit during play, 1 if the snake died (game_over).
+ */
+static int game_loop(void)
 {
-    Snake *snake;
     int running;
+    int nx;
+    int ny;
 
-    memory_init();
-    keyboard_init();
-
-    snake = (Snake *)my_alloc((int)sizeof(Snake));
-    if (snake == 0) {
-        return 1;
-    }
-    g_snake = snake;
-
-    /* Allocate Food with my_alloc() at game start. */
-    g_food = (Food *)my_alloc((int)sizeof(Food));
-    if (g_food == 0) {
-        my_dealloc((void *)snake);
-        return 1;
-    }
-    g_food->active = 0;
-
-    snake->x = BOARD_WIDTH / 2;
-    snake->y = BOARD_HEIGHT / 2;
     running = 1;
-    dir_x = 1;
-    dir_y = 0;
-    just_ate = 0;
-    game_over = 0;
-    score = 0;
-    foods_eaten = 0;
-    food_spawn(BOARD_WIDTH, BOARD_HEIGHT);
 
-    /* Initial render. */
+    /* Initial render for this session (also used after restart). */
     screen_clear();
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
     tail_draw();
     if (g_food->active) {
         screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
     }
-    screen_draw_char(snake->x, snake->y, '@');
+    screen_draw_char(g_snake->x, g_snake->y, '@');
     score_draw();
     screen_move_cursor(1, BOARD_HEIGHT + 1);
     screen_present();
 
     while (running) {
-        int nx;
-        int ny;
-
         g_tick++;
 
         /* 1. Input: read key and update direction (blocks reverse). */
@@ -404,16 +554,16 @@ int main(void)
             key = read_key();
             if (key == 'q' || key == 'Q') {
                 running = 0;
-                break;
+                return 0;
             }
             update_direction(key);
         }
 
         /* 2. Calculate next head position using direction vectors. */
-        nx = snake->x + dir_x;
-        ny = snake->y + dir_y;
+        nx = g_snake->x + dir_x;
+        ny = g_snake->y + dir_y;
 
-        /* 3. Collision checks (Prompt 12) — before moving. */
+        /* 3. Collision checks — before moving. */
         check_all_collisions(nx, ny, g_food, BOARD_WIDTH, BOARD_HEIGHT);
         if (game_over) {
             running = 0;
@@ -421,9 +571,9 @@ int main(void)
         }
 
         /* 4. Move snake: old head becomes tail, update head position. */
-        tail_push_front(snake->x, snake->y);
-        snake->x = nx;
-        snake->y = ny;
+        tail_push_front(g_snake->x, g_snake->y);
+        g_snake->x = nx;
+        g_snake->y = ny;
         if (!just_ate) {
             while (snake_length > foods_eaten) {
                 tail_pop_back();
@@ -441,7 +591,7 @@ int main(void)
         if (g_food->active) {
             screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
         }
-        screen_draw_char(snake->x, snake->y, '@');
+        screen_draw_char(g_snake->x, g_snake->y, '@');
         score_draw();
         screen_move_cursor(1, BOARD_HEIGHT + 1);
         screen_present();
@@ -449,14 +599,55 @@ int main(void)
         usleep(120000);
     }
 
+    return 1;
+}
+
+int main(void)
+{
+    int outcome;
+
+    keyboard_init();
+
+    game_reset();
+
+    for (;;) {
+        outcome = game_loop();
+        if (outcome == 0) {
+            break;
+        }
+
+        show_game_over();
+
+        for (;;) {
+            char key;
+
+            if (!key_pressed()) {
+                usleep(50000);
+                continue;
+            }
+
+            key = read_key();
+            if (key == 'r' || key == 'R') {
+                game_reset();
+                break;
+            }
+
+            if (key == 'q' || key == 'Q') {
+                keyboard_restore();
+                exit(0);
+            }
+        }
+    }
+
     /* Free any remaining tail segments before exit (true runtime free). */
     while (snake_head != 0) {
         tail_pop_back();
     }
 
-    /* Deallocate Food with my_dealloc() on game over. */
     my_dealloc((void *)g_food);
-    my_dealloc((void *)snake);
+    g_food = 0;
+    my_dealloc((void *)g_snake);
+    g_snake = 0;
     keyboard_restore();
     return 0;
 }
