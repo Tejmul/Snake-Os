@@ -154,15 +154,32 @@ static void score_add(int points)
 }
 
 /*
- * Draws the top score bar showing "SCORE: X  LENGTH: Y".
+ * Tick delay in microseconds: faster as score rises (math.c only for scaling).
+ */
+static int get_delay(int score)
+{
+    int steps;
+    int reduction;
+    int delay;
+
+    steps = my_div(score, 50);
+    reduction = my_mul(steps, 10000);
+    delay = 150000 - reduction;
+    return my_clamp(delay, 60000, 150000);
+}
+
+/*
+ * Draws the top score bar showing "SCORE: X  LENGTH: Y  SPEED: Z".
  * Uses my_int_to_str() and my_strcpy() from string.c only — no printf("%d").
  */
 static void score_draw(void)
 {
     int x;
     int len;
-    char buf[40];
+    char buf[96];
     char num[16];
+    int d;
+    int speed_level;
 
     /* Step 1: clear the score row (between borders). */
     screen_draw_char(1, SCORE_ROW, '#');
@@ -186,7 +203,18 @@ static void score_draw(void)
     my_int_to_str(snake_length + 1, num);
     my_strcpy(buf + len, num);
 
-    /* Step 4: draw the combined string on the score row. */
+    /* Step 4: append "  SPEED: <1..5>" from delay (math.c only). */
+    d = get_delay(score);
+    speed_level = my_div(my_div(150000 - d, 10000), 1);
+    speed_level = speed_level + 1;
+    speed_level = my_clamp(speed_level, 1, 5);
+    len = my_strlen(buf);
+    my_strcpy(buf + len, "  SPEED: ");
+    len = my_strlen(buf);
+    my_int_to_str(speed_level, num);
+    my_strcpy(buf + len, num);
+
+    /* Step 5: draw the combined string on the score row. */
     screen_draw_string(3, SCORE_ROW, buf);
 }
 
@@ -596,7 +624,7 @@ static int game_loop(void)
         screen_move_cursor(1, BOARD_HEIGHT + 1);
         screen_present();
 
-        usleep(120000);
+        usleep(get_delay(score));
     }
 
     return 1;
