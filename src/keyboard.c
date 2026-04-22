@@ -1,4 +1,4 @@
-#include "keyboard.h"
+#include "../include/keyboard.h"
 
 #include <stdio.h>
 #include <termios.h>

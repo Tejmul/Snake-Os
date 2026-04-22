@@ -1,5 +1,5 @@
-#include "screen.h"
-#include "string.h"
+#include "../include/screen.h"
+#include "../include/string.h"
 
 #include <stdio.h>
 
@@ -72,15 +72,15 @@ void screen_draw_border(int width, int height)
 
 	x = 1;
 	while (x <= width) {
-		screen_draw_char(x, 1, '#');
-		screen_draw_char(x, height, '#');
+		screen_draw_char(x, 1, '+');
+		screen_draw_char(x, height, '+');
 		x++;
 	}
 
 	y = 2;
 	while (y < height) {
-		screen_draw_char(1, y, '#');
-		screen_draw_char(width, y, '#');
+		screen_draw_char(1, y, '+');
+		screen_draw_char(width, y, '+');
 		y++;
 	}
 }
@@ -89,4 +89,22 @@ void screen_draw_border(int width, int height)
 void screen_present(void)
 {
 	fflush(stdout);
+}
+
+/* Sets the ANSI foreground colour for subsequent drawing operations. */
+void screen_set_color(int fg_color)
+{
+	char color[12];
+	
+	my_int_to_str(fg_color, color);
+
+	write_text("\033[");
+	write_text(color);
+	write_text("m");
+}
+
+/* Resets the ANSI color to terminal default. */
+void screen_reset_color(void)
+{
+	write_text("\033[0m");
 }

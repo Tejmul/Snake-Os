@@ -1,4 +1,5 @@
-#include "string.h"
+#include "../include/string.h"
+#include "../include/math.h"
 
 /* Returns the length of a null-terminated string. */
 int my_strlen(const char *s)
@@ -87,9 +88,9 @@ void my_int_to_str(int n, char *buf)
 	}
 
 	while (value > 0U) {
-		*p = (char)('0' + (value % 10U));
+		*p = (char)('0' + my_mod((int)value, 10));
 		p++;
-		value /= 10U;
+		value = (unsigned int)my_div((int)value, 10);
 	}
 
 	*p = '\0';

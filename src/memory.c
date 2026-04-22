@@ -1,7 +1,8 @@
-#include "memory.h"
+#include "../include/memory.h"
 
-#include "screen.h"
-#include "string.h"
+#include "../include/screen.h"
+#include "../include/string.h"
+#include "../include/math.h"
 
 /*
  * NOTE:
@@ -41,7 +42,7 @@ static int align_up(int n)
 		alignment = 4;
 	}
 
-	rem = n % alignment;
+	rem = my_mod(n, alignment);
 	if (rem == 0) {
 		return n;
 	}

@@ -1,8 +1,8 @@
-#include "keyboard.h"
-#include "math.h"
-#include "memory.h"
-#include "screen.h"
-#include "string.h"
+#include "../include/keyboard.h"
+#include "../include/math.h"
+#include "../include/memory.h"
+#include "../include/screen.h"
+#include "../include/string.h"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -95,11 +95,13 @@ void tail_draw(void)
 {
     Segment *cur;
 
+    screen_set_color(36);
     cur = snake_head;
     while (cur != 0) {
         screen_draw_char(cur->x, cur->y, 'o');
         cur = cur->next;
     }
+    screen_reset_color();
 }
 
 /* Returns 1 if any tail segment occupies (x, y). */
@@ -191,8 +193,10 @@ static void score_draw(void)
     int speed_level;
 
     /* Step 1: clear the score row (between borders). */
-    screen_draw_char(1, SCORE_ROW, '#');
-    screen_draw_char(BOARD_WIDTH, SCORE_ROW, '#');
+    screen_set_color(34);
+    screen_draw_char(1, SCORE_ROW, '+');
+    screen_draw_char(BOARD_WIDTH, SCORE_ROW, '+');
+    screen_reset_color();
 
     x = 2;
     while (x <= BOARD_WIDTH - 1) {
@@ -224,7 +228,9 @@ static void score_draw(void)
     my_strcpy(buf + len, num);
 
     /* Step 5: draw the combined string on the score row. */
+    screen_set_color(33);
     screen_draw_string(3, SCORE_ROW, buf);
+    screen_reset_color();
 }
 
 /*
@@ -256,8 +262,8 @@ static void food_spawn(int board_w, int board_h)
     attempts = 0;
     while (attempts < max_cells) {
         g_tick++;
-        x = my_mod(g_tick * 37 + 17, range_x) + PLAY_MIN_X;
-        y = my_mod(g_tick * 53 + 11, range_y) + PLAY_MIN_Y;
+        x = my_mod(my_mul(g_tick, 37) + 17, range_x) + PLAY_MIN_X;
+        y = my_mod(my_mul(g_tick, 53) + 11, range_y) + PLAY_MIN_Y;
         attempts++;
 
         /* Make sure food does not spawn on the snake head or any tail segment. */
@@ -431,7 +437,7 @@ void game_reset(void)
     /* Three tail cells behind the head, opposite movement direction. */
     k = 3;
     while (k >= 1) {
-        tail_push_front(g_snake->x - k * dir_x, g_snake->y - k * dir_y);
+        tail_push_front(g_snake->x - my_mul(k, dir_x), g_snake->y - my_mul(k, dir_y));
         k--;
     }
     foods_eaten = snake_length;
@@ -507,21 +513,25 @@ void show_game_over(void)
     }
 
     screen_clear();
+    screen_set_color(35);
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
 
     i = 0;
     while (i < inner_w + 2) {
-        screen_draw_char(box_x + i, box_y, '#');
-        screen_draw_char(box_x + i, box_y + box_h - 1, '#');
+        screen_draw_char(box_x + i, box_y, '+');
+        screen_draw_char(box_x + i, box_y + box_h - 1, '+');
         i++;
     }
 
     i = 1;
     while (i < box_h - 1) {
-        screen_draw_char(box_x, box_y + i, '#');
-        screen_draw_char(box_x + inner_w + 1, box_y + i, '#');
+        screen_draw_char(box_x, box_y + i, '+');
+        screen_draw_char(box_x + inner_w + 1, box_y + i, '+');
         i++;
     }
+    screen_reset_color();
+
+    screen_set_color(33);
 
     y = box_y + 1;
     lx = box_x + 1 + (inner_w - my_strlen(line0)) / 2;
@@ -538,6 +548,7 @@ void show_game_over(void)
     y++;
     lx = box_x + 1 + (inner_w - my_strlen(line4)) / 2;
     screen_draw_string(lx, y, line4);
+    screen_reset_color();
 
     memory_dump();
     screen_move_cursor(1, BOARD_HEIGHT + 1);
@@ -612,12 +623,18 @@ static int game_loop(void)
 
     /* Initial render for this session (also used after restart). */
     screen_clear();
+    screen_set_color(34);
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
+    screen_reset_color();
     tail_draw();
     if (g_food->active) {
+        screen_set_color(91);
         screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
+        screen_reset_color();
     }
+    screen_set_color(92);
     screen_draw_char(g_snake->x, g_snake->y, '@');
+    screen_reset_color();
     score_draw();
     screen_move_cursor(1, BOARD_HEIGHT + 1);
     screen_present();
@@ -662,14 +679,16 @@ static int game_loop(void)
         /* 5. Survival bonus: +1 score per tick. */
         score_add(1);
 
-        /* 6. Render: clear -> border -> tail -> food -> head -> score. */
-        screen_clear();
-        screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
+        /* 6. Render: tail -> food -> head -> score. (No screen_clear to avoid flickering) */
         tail_draw();
         if (g_food->active) {
+            screen_set_color(91);
             screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
+            screen_reset_color();
         }
+        screen_set_color(92);
         screen_draw_char(g_snake->x, g_snake->y, '@');
+        screen_reset_color();
         score_draw();
         screen_move_cursor(1, BOARD_HEIGHT + 1);
         screen_present();

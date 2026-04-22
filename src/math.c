@@ -1,4 +1,4 @@
-#include "math.h"
+#include "../include/math.h"
 
 /* Returns the absolute value of an integer. */
 int my_abs(int a)

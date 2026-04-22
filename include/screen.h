@@ -19,4 +19,10 @@ void screen_draw_border(int width, int height);
 /* Flushes pending terminal output for the current frame. */
 void screen_present(void);
 
+/* Sets the ANSI foreground color for subsequent drawing operations. */
+void screen_set_color(int fg_color);
+
+/* Resets the ANSI color to terminal default. */
+void screen_reset_color(void);
+
 #endif /* SNAKE_OS_SCREEN_H */
