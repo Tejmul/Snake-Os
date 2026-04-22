@@ -104,6 +104,7 @@ void tail_draw(void)
     screen_reset_color();
 }
 
+
 /* Returns 1 if any tail segment occupies (x, y). */
 int tail_collides(int x, int y)
 {
@@ -136,6 +137,38 @@ typedef struct Food {
     int y;
     int active;
 } Food;
+
+/* --- New Obstacle System --- */
+typedef struct Obstacle {
+    int type;         /* 0: static, 1: horizontal moving, 2: vertical moving */
+    int x;
+    int y;
+    int dir;          /* 1 or -1 for moving obstacles */
+    int min_val;      /* Minimum x or y bound */
+    int max_val;      /* Maximum x or y bound */
+    struct Obstacle *next;
+} Obstacle;
+
+static Obstacle *g_obstacles = 0;
+static int current_level = 1;
+
+/* Draws all obstacles. */
+void obstacles_draw(void)
+{
+    Obstacle *obs = g_obstacles;
+    while (obs != 0) {
+        if (obs->type == 0) {
+            screen_set_color(34); /* Blue for static walls */
+            screen_draw_char(obs->x, obs->y, '#');
+        } else {
+            screen_set_color(94); /* Light blue for moving enemies */
+            screen_draw_char(obs->x, obs->y, 'M');
+        }
+        screen_reset_color();
+        obs = obs->next;
+    }
+}
+
 
 /* Global tick counter used as pseudo-random seed for food placement. */
 static int g_tick = 0;
@@ -308,6 +341,19 @@ static int hits_self(int x, int y)
     return tail_collides(x, y);
 }
 
+/* Returns 1 if position (x, y) overlaps any obstacle. */
+static int hits_obstacle(int x, int y)
+{
+    Obstacle *obs = g_obstacles;
+    while (obs != 0) {
+        if (my_abs(x - obs->x) == 0 && my_abs(y - obs->y) == 0) {
+            return 1;
+        }
+        obs = obs->next;
+    }
+    return 0;
+}
+
 /*
  * Returns 1 if position (x, y) matches the food position.
  * Uses my_abs() from math.c instead of direct == comparison.
@@ -358,6 +404,11 @@ static void check_all_collisions(int x, int y, Food *f, int board_w, int board_h
         return;
     }
 
+    if (hits_obstacle(x, y)) {
+        game_over = 1;
+        return;
+    }
+
     if (f != 0 && f->active && hits_food(x, y, f)) {
         food_eat();
     }
@@ -370,6 +421,8 @@ static void game_free_allocations(void)
 {
     Segment *cur;
     Segment *next;
+    Obstacle *obs;
+    Obstacle *next_obs;
 
     cur = snake_head;
     while (cur != 0) {
@@ -380,6 +433,14 @@ static void game_free_allocations(void)
     snake_head = 0;
     snake_length = 0;
 
+    obs = g_obstacles;
+    while (obs != 0) {
+        next_obs = obs->next;
+        my_dealloc((void *)obs);
+        obs = next_obs;
+    }
+    g_obstacles = 0;
+
     if (g_food != 0) {
         my_dealloc((void *)g_food);
         g_food = 0;
@@ -388,6 +449,98 @@ static void game_free_allocations(void)
     if (g_snake != 0) {
         my_dealloc((void *)g_snake);
         g_snake = 0;
+    }
+}
+
+/*
+ * Obstacle Generation & Updating System
+ */
+static void obstacle_push(int type, int x, int y, int dir, int min_val, int max_val)
+{
+    Obstacle *obs = (Obstacle *)my_alloc((int)sizeof(Obstacle));
+    if (obs == 0) return;
+    obs->type = type;
+    obs->x = x;
+    obs->y = y;
+    obs->dir = dir;
+    obs->min_val = min_val;
+    obs->max_val = max_val;
+    obs->next = g_obstacles;
+    g_obstacles = obs;
+}
+
+static void level_generate(int level)
+{
+    int i, x, y;
+    int num_static = 0;
+    int num_moving = 0;
+    int range_x = (BOARD_WIDTH - 1) - PLAY_MIN_X + 1;
+    int range_y = (BOARD_HEIGHT - 1) - PLAY_MIN_Y + 1;
+
+    if (level <= 1) return;
+    if (level == 2) { num_static = 10; }
+    else if (level == 3) { num_static = 15; num_moving = 2; }
+    else { num_static = 20; num_moving = 4; }
+
+    /* Generate static obstacles */
+    for (i = 0; i < num_static; i++) {
+        int attempts = 0;
+        while (attempts < 100) {
+            g_tick++;
+            x = my_mod(my_mul(g_tick, 37) + 17, range_x) + PLAY_MIN_X;
+            y = my_mod(my_mul(g_tick, 53) + 11, range_y) + PLAY_MIN_Y;
+            attempts++;
+            /* Prevent spawning on snake head */
+            if (g_snake != 0 && my_abs(x - g_snake->x) == 0 && my_abs(y - g_snake->y) == 0) continue;
+            /* Prevent spawning on tail */
+            if (tail_collides(x, y)) continue;
+            /* Prevent spawning on food */
+            if (g_food != 0 && g_food->active && hits_food(x, y, g_food)) continue;
+            /* Prevent spawning on other obstacles */
+            if (hits_obstacle(x, y)) continue;
+
+            obstacle_push(0, x, y, 0, 0, 0);
+            break;
+        }
+    }
+
+    /* Generate moving obstacles */
+    for (i = 0; i < num_moving; i++) {
+        g_tick++;
+        /* Pick a random row or column for the moving obstacle track */
+        y = my_mod(my_mul(g_tick, 41) + 7, range_y) + PLAY_MIN_Y;
+        /* Start from middle of board horizontally */
+        x = BOARD_WIDTH / 2;
+        /* Avoid overlapping snake roughly */
+        if (g_snake != 0 && my_abs(y - g_snake->y) <= 2) {
+            y = PLAY_MIN_Y + 2; /* Force it to top if too close to head y */
+        }
+        obstacle_push(1, x, y, 1, PLAY_MIN_X + 2, PLAY_MAX_X - 2);
+    }
+}
+
+static void obstacles_update(void)
+{
+    Obstacle *obs = g_obstacles;
+    /* Move every 2 ticks to make dodging fair */
+    if (my_mod(g_tick, 2) != 0) return;
+
+    while (obs != 0) {
+        if (obs->type == 1) { /* Horizontal */
+            /* Erase old position */
+            screen_draw_char(obs->x, obs->y, ' ');
+            obs->x += obs->dir;
+            if (obs->x >= obs->max_val || obs->x <= obs->min_val) {
+                obs->dir = my_mul(obs->dir, -1); /* Invert direction */
+            }
+            /* If it moves into the snake head or tail, trigger game over */
+            if (g_snake != 0 && my_abs(obs->x - g_snake->x) == 0 && my_abs(obs->y - g_snake->y) == 0) {
+                game_over = 1;
+            } else if (tail_collides(obs->x, obs->y)) {
+                game_over = 1;
+            }
+        }
+        obs = obs->next;
     }
 }
 
@@ -428,6 +581,7 @@ void game_reset(void)
     game_over = 0;
     score = 0;
     g_tick = 0;
+    current_level = 1;
 
     /* Three tail cells behind the head, opposite movement direction. */
     k = 3;
@@ -622,6 +776,7 @@ static int game_loop(void)
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
     screen_reset_color();
     tail_draw();
+    obstacles_draw();
     if (g_food->active) {
         screen_set_color(91);
         screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
@@ -674,8 +829,38 @@ static int game_loop(void)
         /* 5. Survival bonus: +1 score per tick. */
         score_add(1);
 
+        /* Level Transition check */
+        {
+            int expected_level = my_div(score, 200) + 1;
+            if (expected_level > current_level) {
+                /* Free old obstacles */
+                Obstacle *obs = g_obstacles;
+                Obstacle *next_obs;
+                while (obs != 0) {
+                    next_obs = obs->next;
+                    /* Erase from screen */
+                    screen_draw_char(obs->x, obs->y, ' ');
+                    my_dealloc((void *)obs);
+                    obs = next_obs;
+                }
+                g_obstacles = 0;
+                
+                current_level = expected_level;
+                level_generate(current_level);
+                
+                /* Redraw screen border just to be safe */
+                screen_clear();
+                screen_set_color(34);
+                screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
+                screen_reset_color();
+            }
+        }
+
+        obstacles_update();
+
         /* 6. Render: tail -> food -> head -> score. (No screen_clear to avoid flickering) */
         tail_draw();
+        obstacles_draw();
         if (g_food->active) {
             screen_set_color(91);
             screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
