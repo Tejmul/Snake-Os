@@ -3,6 +3,9 @@
 
 #include <stdio.h>
 
+static int g_screen_initialized = 0;
+int atexit(void (*function)(void));
+
 /* Writes a null-terminated string to stdout using character output only. */
 static void write_text(const char *s)
 {
@@ -17,6 +20,22 @@ void screen_clear(void)
 {
 	write_text("\033[2J");
 	write_text("\033[1;1H");
+}
+
+void screen_restore(void) {
+	if (!g_screen_initialized) return;
+	write_text("\033[?25h");
+	write_text("\033[?1049l");
+	g_screen_initialized = 0;
+}
+
+void screen_init(void) {
+	if (g_screen_initialized) return;
+	write_text("\033[?1049h");
+	write_text("\033[?25l");
+	screen_clear();
+	atexit(screen_restore);
+	g_screen_initialized = 1;
 }
 
 /* Moves the cursor to column x and row y. */
@@ -72,15 +91,15 @@ void screen_draw_border(int width, int height)
 
 	x = 1;
 	while (x <= width) {
-		screen_draw_char(x, 1, '+');
-		screen_draw_char(x, height, '+');
+		screen_draw_char(x, 2, '|');
+		screen_draw_char(x, height, '|');
 		x++;
 	}
 
-	y = 2;
+	y = 3;
 	while (y < height) {
-		screen_draw_char(1, y, '+');
-		screen_draw_char(width, y, '+');
+		screen_draw_char(1, y, '|');
+		screen_draw_char(width, y, '|');
 		y++;
 	}
 }

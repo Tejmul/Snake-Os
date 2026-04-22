@@ -7,10 +7,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define BOARD_WIDTH 40
+#define BOARD_WIDTH 78
 #define BOARD_HEIGHT 20
 
-#define SCORE_ROW 2
+#define SCORE_ROW 1
 #define PLAY_MIN_X 2
 #define PLAY_MAX_X (BOARD_WIDTH - 1)
 #define PLAY_MIN_Y 3
@@ -192,14 +192,9 @@ static void score_draw(void)
     int d;
     int speed_level;
 
-    /* Step 1: clear the score row (between borders). */
-    screen_set_color(34);
-    screen_draw_char(1, SCORE_ROW, '+');
-    screen_draw_char(BOARD_WIDTH, SCORE_ROW, '+');
-    screen_reset_color();
-
-    x = 2;
-    while (x <= BOARD_WIDTH - 1) {
+    /* Step 1: clear the score row. */
+    x = 1;
+    while (x <= BOARD_WIDTH) {
         screen_draw_char(x, SCORE_ROW, ' ');
         x++;
     }
@@ -229,7 +224,7 @@ static void score_draw(void)
 
     /* Step 5: draw the combined string on the score row. */
     screen_set_color(33);
-    screen_draw_string(3, SCORE_ROW, buf);
+    screen_draw_string(2, SCORE_ROW, buf);
     screen_reset_color();
 }
 
@@ -518,15 +513,15 @@ void show_game_over(void)
 
     i = 0;
     while (i < inner_w + 2) {
-        screen_draw_char(box_x + i, box_y, '+');
-        screen_draw_char(box_x + i, box_y + box_h - 1, '+');
+        screen_draw_char(box_x + i, box_y, '|');
+        screen_draw_char(box_x + i, box_y + box_h - 1, '|');
         i++;
     }
 
     i = 1;
     while (i < box_h - 1) {
-        screen_draw_char(box_x, box_y + i, '+');
-        screen_draw_char(box_x + inner_w + 1, box_y + i, '+');
+        screen_draw_char(box_x, box_y + i, '|');
+        screen_draw_char(box_x + inner_w + 1, box_y + i, '|');
         i++;
     }
     screen_reset_color();
@@ -704,6 +699,7 @@ int main(void)
     int outcome;
 
     keyboard_init();
+    screen_init();
 
     game_reset();
 

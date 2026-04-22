@@ -281,7 +281,7 @@ void memory_dump(void)
 
 	/* Clear the line first so shrinking messages don't leave stale chars. */
 	x = 1;
-	while (x <= 80) {
+	while (x <= 78) {
 		screen_draw_char(x, 22, ' ');
 		x++;
 	}

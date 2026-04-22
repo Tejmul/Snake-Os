@@ -1,6 +1,12 @@
 #ifndef SNAKE_OS_SCREEN_H
 #define SNAKE_OS_SCREEN_H
 
+/* Initializes the terminal viewport, alternate screen buffer, and hides cursor. */
+void screen_init(void);
+
+/* Restores the original terminal state. */
+void screen_restore(void);
+
 /* Clears the terminal using ANSI escape codes. */
 void screen_clear(void);
 
