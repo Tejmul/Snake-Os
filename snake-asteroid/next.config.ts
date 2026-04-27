@@ -9,7 +9,13 @@ const nextConfig: NextConfig = {
     "@react-three/postprocessing",
     "postprocessing",
   ],
-  turbopack: {},
+  turbopack: {
+    root: __dirname,
+  },
+  webpack: (config) => {
+    config.externals = [...(config.externals || []), { canvas: "canvas" }];
+    return config;
+  },
 };
 
 export default nextConfig;
