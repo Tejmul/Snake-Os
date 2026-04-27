@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --void-black: #0a0a0f;
+  --nebula-dark: #0d1117;
+  --asteroid-gray: #2d2d3a;
+  --cosmic-purple: #6c3fa0;
+  --plasma-blue: #00d4ff;
+  --solar-orange: #ff6a00;
+  --supernova-gold: #ffd700;
+  --alien-green: #39ff14;
+  --danger-red: #ff1744;
+  --star-white: #e8e8ff;
+
+  --challenge-glow: #ff00ff;
+  --challenge-chaos: #ff3366;
+  --challenge-pulse: 0.5s;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--void-black);
+  color: var(--star-white);
+}
+
+::selection {
+  background: var(--cosmic-purple);
+  color: var(--star-white);
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes glitch {
+  0% {
+    transform: translate(0);
+  }
+  20% {
+    transform: translate(-2px, 1px);
+  }
+  40% {
+    transform: translate(2px, -1px);
+  }
+  60% {
+    transform: translate(-1px, -2px);
+  }
+  80% {
+    transform: translate(1px, 2px);
+  }
+  100% {
+    transform: translate(0);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
 }
