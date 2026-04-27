@@ -2,16 +2,18 @@
 
 import { useEffect } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { useCEngine } from '@/hooks/useCEngine';
 
 export default function KeyboardController() {
   const gameState = useGameStore((s) => s.gameState);
-  const setDirection = useGameStore((s) => s.setDirection);
   const pauseGame = useGameStore((s) => s.pauseGame);
   const resumeGame = useGameStore((s) => s.resumeGame);
   const toggleChallengeMode = useGameStore((s) => s.toggleChallengeMode);
   const setCameraMode = useGameStore((s) => s.setCameraMode);
   const cameraMode = useGameStore((s) => s.cameraMode);
   const setInputMode = useGameStore((s) => s.setInputMode);
+
+  const { sendDirection } = useCEngine();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -22,25 +24,25 @@ export default function KeyboardController() {
         case 'w':
         case 'W':
           e.preventDefault();
-          setDirection('UP');
+          sendDirection('UP');
           break;
         case 'ArrowDown':
         case 's':
         case 'S':
           e.preventDefault();
-          setDirection('DOWN');
+          sendDirection('DOWN');
           break;
         case 'ArrowLeft':
         case 'a':
         case 'A':
           e.preventDefault();
-          setDirection('LEFT');
+          sendDirection('LEFT');
           break;
         case 'ArrowRight':
         case 'd':
         case 'D':
           e.preventDefault();
-          setDirection('RIGHT');
+          sendDirection('RIGHT');
           break;
         case ' ':
           e.preventDefault();
@@ -72,7 +74,7 @@ export default function KeyboardController() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, cameraMode, setDirection, pauseGame, resumeGame, toggleChallengeMode, setCameraMode, setInputMode]);
+  }, [gameState, cameraMode, sendDirection, pauseGame, resumeGame, toggleChallengeMode, setCameraMode, setInputMode]);
 
   return null;
 }

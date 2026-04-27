@@ -2,11 +2,12 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { useCEngine } from '@/hooks/useCEngine';
 import type { Direction } from '@/types/game';
 
 export default function TouchControls() {
   const gameState = useGameStore((s) => s.gameState);
-  const setDirection = useGameStore((s) => s.setDirection);
+  const { sendDirection } = useCEngine();
   const [isMobile, setIsMobile] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
@@ -39,7 +40,7 @@ export default function TouchControls() {
       } else {
         dir = dy > 0 ? 'DOWN' : 'UP';
       }
-      setDirection(dir);
+      sendDirection(dir);
       touchStart.current = null;
     };
 
@@ -49,7 +50,7 @@ export default function TouchControls() {
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [gameState, setDirection]);
+  }, [gameState, sendDirection]);
 
   if (!isMobile || gameState !== 'playing') return null;
 
@@ -60,21 +61,21 @@ export default function TouchControls() {
     <div className="fixed bottom-6 right-6 z-30 pointer-events-auto">
       <div className="grid grid-cols-3 grid-rows-3 gap-1 w-[180px] h-[180px]">
         <div />
-        <button className={buttonClass} onTouchStart={() => setDirection('UP')}>
+        <button className={buttonClass} onTouchStart={() => sendDirection('UP')}>
           ↑
         </button>
         <div />
-        <button className={buttonClass} onTouchStart={() => setDirection('LEFT')}>
+        <button className={buttonClass} onTouchStart={() => sendDirection('LEFT')}>
           ←
         </button>
         <div className="w-14 h-14 rounded-xl border border-[var(--asteroid-gray)] flex items-center justify-center opacity-20">
           •
         </div>
-        <button className={buttonClass} onTouchStart={() => setDirection('RIGHT')}>
+        <button className={buttonClass} onTouchStart={() => sendDirection('RIGHT')}>
           →
         </button>
         <div />
-        <button className={buttonClass} onTouchStart={() => setDirection('DOWN')}>
+        <button className={buttonClass} onTouchStart={() => sendDirection('DOWN')}>
           ↓
         </button>
         <div />

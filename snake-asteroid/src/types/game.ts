@@ -70,13 +70,29 @@ export interface Portal {
   color: string;
 }
 
+export interface Obstacle {
+  type: number;
+  x: number;
+  y: number;
+  dir: number;
+  minVal: number;
+  maxVal: number;
+}
+
 export interface EngineState {
   snake: SnakeSegment[];
   food: FoodItem[];
   direction: Direction;
+  dirX: number;
+  dirY: number;
   stats: GameStats;
   gridSize: number;
   alive: boolean;
+  gameTick: number;
+  obstacles: Obstacle[];
+  level: number;
+  foodsEaten: number;
+  justAte: boolean;
   lastFoodTime: number;
   portals: Portal[];
   shrunkWalls: number;

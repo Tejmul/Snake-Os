@@ -78,6 +78,8 @@ export function useGesture(videoRef: React.RefObject<HTMLVideoElement | null>) {
   );
 
   useEffect(() => {
+    if (!videoRef.current) return;
+    
     let active = true;
 
     const init = async () => {

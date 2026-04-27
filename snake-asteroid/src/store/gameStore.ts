@@ -11,9 +11,7 @@ import type {
   GestureState,
   VoiceState,
 } from '@/types/game';
-import { initGame, tick as engineTick, isOppositeDirection, spawnFood } from '@/lib/snakeEngine';
 import { GRID_SIZE } from '@/lib/constants';
-import type { EngineState } from '@/types/game';
 
 interface GameStore {
   gameState: GameState;
@@ -21,7 +19,6 @@ interface GameStore {
   snake: SnakeSegment[];
   food: FoodItem[];
   direction: Direction;
-  directionQueue: Direction[];
   gridSize: number;
 
   inputMode: InputMode;
@@ -37,7 +34,6 @@ interface GameStore {
   showMinimap: boolean;
   showGestureOverlay: boolean;
 
-  engineState: EngineState | null;
   lastEatenFood: FoodItem | null;
   highScore: number;
 
@@ -46,7 +42,6 @@ interface GameStore {
   resumeGame: () => void;
   gameOver: () => void;
   setDirection: (dir: Direction) => void;
-  tick: () => void;
   toggleChallengeMode: () => void;
   activateChallenge: (challenge: Challenge) => void;
   deactivateChallenge: (type: ChallengeType) => void;
@@ -92,7 +87,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
   snake: [],
   food: [],
   direction: 'RIGHT',
-  directionQueue: [],
   gridSize: GRID_SIZE,
 
   inputMode: 'keyboard',
@@ -108,21 +102,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
   showMinimap: true,
   showGestureOverlay: true,
 
-  engineState: null,
   lastEatenFood: null,
   highScore: 0,
 
   startGame: () => {
-    const { gridSize } = get();
-    const engine = initGame(gridSize);
     set({
       gameState: 'playing',
-      engineState: engine,
-      snake: engine.snake,
-      food: engine.food,
-      direction: engine.direction,
-      directionQueue: [],
-      stats: { ...engine.stats },
+      stats: { ...defaultStats },
+      snake: [],
+      food: [],
+      direction: 'RIGHT',
       activeChallenges: [],
       challengeHistory: [],
       lastEatenFood: null,
@@ -154,54 +143,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   setDirection: (dir: Direction) => {
-    const { direction, directionQueue } = get();
-    const lastQueued = directionQueue.length > 0
-      ? directionQueue[directionQueue.length - 1]
-      : direction;
-    if (!isOppositeDirection(lastQueued, dir) && lastQueued !== dir && directionQueue.length < 2) {
-      set({ directionQueue: [...directionQueue, dir] });
-    }
-  },
-
-  tick: () => {
-    const { engineState, directionQueue, direction, gameState } = get();
-    if (!engineState || gameState !== 'playing') return;
-
-    let nextDir = direction;
-    const newQueue = [...directionQueue];
-
-    while (newQueue.length > 0) {
-      const candidate = newQueue.shift()!;
-      if (!isOppositeDirection(engineState.direction, candidate)) {
-        nextDir = candidate;
-        break;
-      }
-    }
-
-    const result = engineTick(engineState, nextDir);
-
-    if (result.died) {
-      set({
-        engineState: result.state,
-        snake: result.state.snake,
-        food: result.state.food,
-        direction: result.state.direction,
-        directionQueue: [],
-        stats: { ...result.state.stats },
-      });
-      get().gameOver();
-      return;
-    }
-
-    set({
-      engineState: result.state,
-      snake: result.state.snake,
-      food: result.state.food,
-      direction: result.state.direction,
-      directionQueue: newQueue,
-      stats: { ...result.state.stats },
-      lastEatenFood: result.ate,
-    });
+    set({ direction: dir });
   },
 
   toggleChallengeMode: () => {
