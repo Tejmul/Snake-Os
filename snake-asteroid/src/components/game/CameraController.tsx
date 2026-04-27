@@ -48,9 +48,9 @@ export default function CameraController() {
         break;
       }
       case 'follow': {
-        const behind = new THREE.Vector3(-dirVec.x * 8, 6, dirVec.y * 8);
+        const behind = new THREE.Vector3(-dirVec.x * 8, 6, -dirVec.y * 8);
         targetPos.current.copy(headWorld).add(behind);
-        const ahead = new THREE.Vector3(dirVec.x * 3, 0, -dirVec.y * 3);
+        const ahead = new THREE.Vector3(dirVec.x * 3, 0, dirVec.y * 3);
         targetLook.current.copy(headWorld).add(ahead);
         break;
       }
@@ -69,7 +69,7 @@ export default function CameraController() {
         const lookAhead = new THREE.Vector3(
           dirVec.x * angle.lookAhead,
           0,
-          -dirVec.y * angle.lookAhead
+          dirVec.y * angle.lookAhead
         );
         targetLook.current.copy(headWorld).add(lookAhead);
         break;

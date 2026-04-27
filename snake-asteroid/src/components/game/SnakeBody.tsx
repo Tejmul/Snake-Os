@@ -69,7 +69,7 @@ export default function SnakeBody() {
   }
 
   const dirVec = DIRECTION_VECTOR[direction];
-  const headAngle = Math.atan2(dirVec.x, -dirVec.y);
+  const headAngle = Math.atan2(dirVec.x, dirVec.y);
 
   return (
     <group ref={groupRef}>
@@ -115,7 +115,7 @@ export default function SnakeBody() {
                   position={[
                     seg.x - half + dirVec.x * 0.25 + (dirVec.y === 0 ? 0 : 0.15),
                     0.55,
-                    seg.y - half - dirVec.y * 0.25 + (dirVec.x === 0 ? 0 : 0.15),
+                    seg.y - half + dirVec.y * 0.25 + (dirVec.x === 0 ? 0 : 0.15),
                   ]}
                 >
                   <sphereGeometry args={[0.06, 8, 8]} />
@@ -129,7 +129,7 @@ export default function SnakeBody() {
                   position={[
                     seg.x - half + dirVec.x * 0.25 + (dirVec.y === 0 ? 0 : -0.15),
                     0.55,
-                    seg.y - half - dirVec.y * 0.25 + (dirVec.x === 0 ? 0 : -0.15),
+                    seg.y - half + dirVec.y * 0.25 + (dirVec.x === 0 ? 0 : -0.15),
                   ]}
                 >
                   <sphereGeometry args={[0.06, 8, 8]} />

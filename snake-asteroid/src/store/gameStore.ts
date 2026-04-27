@@ -21,7 +21,7 @@ interface GameStore {
   snake: SnakeSegment[];
   food: FoodItem[];
   direction: Direction;
-  nextDirection: Direction;
+  directionQueue: Direction[];
   gridSize: number;
 
   inputMode: InputMode;
@@ -92,7 +92,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   snake: [],
   food: [],
   direction: 'RIGHT',
-  nextDirection: 'RIGHT',
+  directionQueue: [],
   gridSize: GRID_SIZE,
 
   inputMode: 'keyboard',
@@ -121,7 +121,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       snake: engine.snake,
       food: engine.food,
       direction: engine.direction,
-      nextDirection: engine.direction,
+      directionQueue: [],
       stats: { ...engine.stats },
       activeChallenges: [],
       challengeHistory: [],
@@ -154,17 +154,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   setDirection: (dir: Direction) => {
-    const { direction } = get();
-    if (!isOppositeDirection(direction, dir)) {
-      set({ nextDirection: dir });
+    const { direction, directionQueue } = get();
+    const lastQueued = directionQueue.length > 0
+      ? directionQueue[directionQueue.length - 1]
+      : direction;
+    if (!isOppositeDirection(lastQueued, dir) && lastQueued !== dir && directionQueue.length < 2) {
+      set({ directionQueue: [...directionQueue, dir] });
     }
   },
 
   tick: () => {
-    const { engineState, nextDirection, gameState } = get();
+    const { engineState, directionQueue, direction, gameState } = get();
     if (!engineState || gameState !== 'playing') return;
 
-    const result = engineTick(engineState, nextDirection);
+    let nextDir = direction;
+    const newQueue = [...directionQueue];
+
+    while (newQueue.length > 0) {
+      const candidate = newQueue.shift()!;
+      if (!isOppositeDirection(engineState.direction, candidate)) {
+        nextDir = candidate;
+        break;
+      }
+    }
+
+    const result = engineTick(engineState, nextDir);
 
     if (result.died) {
       set({
@@ -172,10 +186,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         snake: result.state.snake,
         food: result.state.food,
         direction: result.state.direction,
-        stats: {
-          ...result.state.stats,
-          timeAlive: result.state.stats.timeAlive,
-        },
+        directionQueue: [],
+        stats: { ...result.state.stats },
       });
       get().gameOver();
       return;
@@ -186,7 +198,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       snake: result.state.snake,
       food: result.state.food,
       direction: result.state.direction,
-      nextDirection: result.state.direction,
+      directionQueue: newQueue,
       stats: { ...result.state.stats },
       lastEatenFood: result.ate,
     });
