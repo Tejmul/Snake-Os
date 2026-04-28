@@ -5,7 +5,7 @@
  * handles fist-to-pause, and exposes status for the HUD.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GestureEngine } from './index';
 
 // Map game directions to C backend key codes.
@@ -69,6 +69,7 @@ export function useGestureEngine({
       setGestureStatus('inactive');
       setGestureDir(null);
       setGestureError(null);
+      setGestureInfo({ rawGesture: null, confidence: 0, fps: 0 });
 
       if (statusInterval.current) {
         clearInterval(statusInterval.current);
@@ -125,6 +126,9 @@ export function useGestureEngine({
       if (engineRef.current === engine) {
         setGestureStatus('active');
       }
+    }).catch((err) => {
+      setGestureError(err?.message || 'UNKNOWN_ERROR');
+      setGestureStatus('error');
     });
 
     // Poll FPS for HUD
