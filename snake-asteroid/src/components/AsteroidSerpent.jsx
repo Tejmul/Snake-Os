@@ -9,6 +9,7 @@ import {
   Noise,
 } from "@react-three/postprocessing";
 import * as THREE from "three";
+import { useGestureEngine } from "../gesture/useGestureEngine";
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    0. WEBSOCKET INTEGRATION
@@ -670,39 +671,7 @@ function useVoice(active,onCmd){
   },[active,fireCmd]);return vs;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════
-   9. GESTURE HOOK
-   ═══════════════════════════════════════════════════════════════════════════════ */
-function useGesture(active,onDir){
-  const[gDir,setGDir]=useState(null);
-  const lastT=useRef(0),vidRef=useRef(null),animRef=useRef(null);
-  useEffect(()=>{
-    if(!active){if(vidRef.current?.srcObject)vidRef.current.srcObject.getTracks().forEach(t=>t.stop());return;}
-    let dead=false;
-    async function go(){try{
-      if(!window.Hands){const s=document.createElement("script");
-        s.src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.min.js";
-        document.head.appendChild(s);await new Promise(r=>s.onload=r);}
-      const v=document.createElement("video");v.setAttribute("playsinline","");v.muted=true;
-      vidRef.current=v;
-      const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:320,height:240,frameRate:30}});
-      v.srcObject=st;await v.play();if(dead){st.getTracks().forEach(t=>t.stop());return;}
-      const h=new window.Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${f}`});
-      h.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.5});
-      h.onResults(res=>{if(!res.multiHandLandmarks?.length)return;
-        const now=Date.now();if(now-lastT.current<140)return;
-        const lm=res.multiHandLandmarks[0],dx=lm[8].x-lm[0].x,dy=lm[8].y-lm[0].y;
-        if(Math.hypot(dx,dy)<.11){const tips=[4,8,12,16,20],mcps=[2,5,9,13,17];
-          if(tips.every((t,i)=>lm[t].y>lm[mcps[i]].y))setGDir("STOP");return;}
-        let d;if(Math.abs(dx)>Math.abs(dy))d=dx>0?"LEFT":"RIGHT";else d=dy<0?"UP":"DOWN";
-        lastT.current=now;setGDir(d);onDir(d);});
-      const det=async()=>{if(dead)return;try{await h.send({image:v});}catch{}
-        animRef.current=requestAnimationFrame(det);};det();
-    }catch(e){console.warn("Gesture init fail:",e);}}go();
-    return()=>{dead=true;if(animRef.current)cancelAnimationFrame(animRef.current);
-      if(vidRef.current?.srcObject)vidRef.current.srcObject.getTracks().forEach(t=>t.stop());};
-  },[active]);return gDir;
-}
+/* Gesture hook moved to ../gesture/useGestureEngine (thumb-based detection) */
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    10. CHALLENGE ENGINE
@@ -763,8 +732,16 @@ export default function AsteroidSerpent(){
         if(OPP[cmd]!==nDir.current)nDir.current=cmd;}
     },[screen]));
 
-  const gDir=useGesture(inp==="gesture"&&running,
-    useCallback(d=>{if(OPP[d]!==nDir.current)nDir.current=d;},[]) );
+  const { gestureDir: gDir, gestureStatus: gStatus, gestureError: gError, gestureInfo: gInfo } =
+    useGestureEngine({
+      active: inp==="gesture"&&running,
+      sendCommand,
+      wsConnected,
+      nDirRef: nDir,
+      setPaused,
+      useCBackend: USE_C_BACKEND,
+      debug: false,
+    });
 
   useEffect(()=>{const h=e=>{
     const km={ArrowUp:"UP",w:"UP",W:"UP",ArrowDown:"DOWN",s:"DOWN",S:"DOWN",
@@ -884,7 +861,7 @@ export default function AsteroidSerpent(){
     {screen==="playing"&&<HUD st={hudSt} inp={inp}
       onCycleInp={()=>{const ms=["keyboard","gesture","voice"];
         setInp(ms[(ms.indexOf(inp)+1)%ms.length]);}}
-      vState={vState} gDir={gDir} chs={chs} chMode={chMode}
+      vState={vState} gDir={gDir} gStatus={gStatus} gError={gError} gInfo={gInfo} chs={chs} chMode={chMode}
       backend={USE_C_BACKEND?"C":"JS"} wsConnected={wsConnected}/>}
     {ann&&<div className="ann">⚠ {ann}</div>}
     {screen==="playing"&&paused&&<div className="pause-ov"><div className="pause-txt">PAUSED</div></div>}
