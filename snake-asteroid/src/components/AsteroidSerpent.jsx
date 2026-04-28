@@ -189,6 +189,8 @@ const CHDEFS=[
   {type:"mirror_snake",name:"DOPPELGANGER",dur:16,diff:3},
 ];
 // Sorted longest-first so multi-word phrases match before single-word substrings
+// Short words use regex word-boundary matching to avoid false triggers
+// (e.g. "cup" shouldn't match "up", "unstoppable" shouldn't match "stop")
 const VMAP_ENTRIES=[
   ["challenge mode","CHALLENGE"],["turn left","LEFT"],["turn right","RIGHT"],
   ["turn up","UP"],["turn down","DOWN"],["go left","LEFT"],["go right","RIGHT"],
@@ -196,6 +198,8 @@ const VMAP_ENTRIES=[
   ["left","LEFT"],["right","RIGHT"],["up","UP"],["down","DOWN"],
   ["stop","PAUSE"],["pause","PAUSE"],["resume","RESUME"],["challenge","CHALLENGE"]
 ];
+// Pre-compile word-boundary regexes for accurate matching
+const VMAP_REGEX=VMAP_ENTRIES.map(([ph,cm])=>[new RegExp(`\\b${ph}\\b`,"i"),cm]);
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    2. GAME ENGINE
@@ -456,9 +460,16 @@ function HUD({st,inp,onCycleInp,vState,gDir,chs,chMode}){
         {chMode&&<span style={{color:"var(--mag)"}}>⚠ CHALLENGE</span>}</div></div>
     <div className="hud-tr" onClick={onCycleInp}>
       {inp==="keyboard"?"⌨ KEYBOARD":inp==="gesture"?"🤚 GESTURE":"🎙 VOICE"}</div>
-    {inp==="voice"&&<div className="v-ind"><div className="v-mic">🎙</div>
-      <div className={`v-cmd ${vState?.lastCommand?"on":""}`}>
-        {vState?.lastCommand||"listening..."}</div></div>}
+    {inp==="voice"&&<div className="v-ind">
+      <div className="v-mic" style={vState?.error?{borderColor:"var(--red)",animation:"none"}:
+        !vState?.listening?{borderColor:"var(--dim)",animation:"none"}:{}}>
+        {vState?.error?"⚠️":"🎙"}</div>
+      <div className={`v-cmd ${vState?.lastCommand||vState?.error?"on":""}`}>
+        {vState?.error==="MIC_DENIED"?"MIC BLOCKED — check permissions":
+         vState?.error==="NOT_SUPPORTED"?"VOICE NOT SUPPORTED":
+         vState?.error==="NETWORK"?"NETWORK ERROR — retrying...":
+         vState?.error?"ERROR — retrying...":
+         vState?.lastCommand||"listening..."}</div></div>}
     {inp==="gesture"&&<div className="g-ind"><div className="g-arr">
       {gDir==="UP"?"↑":gDir==="DOWN"?"↓":gDir==="LEFT"?"←":gDir==="RIGHT"?"→":"✋"}</div></div>}
     {chs.length>0&&<div className="ch-bar">{chs.map((c,i)=><div key={i} className="ch-card">
@@ -537,7 +548,7 @@ function GameOver({st,onRestart,onMenu}){
    ═══════════════════════════════════════════════════════════════════════════════ */
 const FAST_CMDS=new Set(["LEFT","RIGHT","UP","DOWN"]); // fire on interim for speed
 function useVoice(active,onCmd){
-  const[vs,setVs]=useState({listening:false,lastCommand:null});
+  const[vs,setVs]=useState({listening:false,lastCommand:null,error:null});
   const recRef=useRef(null),toRef=useRef(null);
   const onCmdRef=useRef(onCmd);
   const lastFired=useRef({cmd:null,time:0}); // debounce tracker
@@ -548,30 +559,35 @@ function useVoice(active,onCmd){
     // debounce: skip if same command fired within 300ms
     if(lastFired.current.cmd===cm&&now-lastFired.current.time<300)return;
     lastFired.current={cmd:cm,time:now};
-    onCmdRef.current(cm);setVs({listening:true,lastCommand:cm});
+    onCmdRef.current(cm);setVs({listening:true,lastCommand:cm,error:null});
     if(toRef.current)clearTimeout(toRef.current);
     toRef.current=setTimeout(()=>setVs(s=>({...s,lastCommand:null})),1400);
   },[]);
 
   useEffect(()=>{
     if(!active){try{recRef.current?.stop();}catch{}recRef.current=null;
-      setVs({listening:false,lastCommand:null});return;}
+      setVs({listening:false,lastCommand:null,error:null});return;}
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){console.warn("SpeechRecognition not supported");return;}
+    if(!SR){setVs({listening:false,lastCommand:null,error:"NOT_SUPPORTED"});return;}
     const r=new SR();r.continuous=true;r.interimResults=true;r.lang="en-US";
     r.maxAlternatives=1;recRef.current=r;
     r.onresult=(ev)=>{for(let i=ev.resultIndex;i<ev.results.length;i++){
       const isFinal=ev.results[i].isFinal;
       const t=ev.results[i][0].transcript.trim().toLowerCase();
-      for(const[ph,cm]of VMAP_ENTRIES){if(t.includes(ph)){
-        // Direction commands fire on interim (fast); system commands wait for final
+      // Use word-boundary regex to avoid false matches (e.g. "cup" → "up")
+      for(const[rx,cm]of VMAP_REGEX){if(rx.test(t)){
         if(FAST_CMDS.has(cm)||isFinal)fireCmd(cm);
         break;}}}};
-    r.onerror=(ev)=>{if(ev.error==="not-allowed"||ev.error==="service-not-allowed")return;
+    r.onerror=(ev)=>{
+      if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){
+        setVs({listening:false,lastCommand:null,error:"MIC_DENIED"});return;}
+      if(ev.error==="network"){
+        setVs(s=>({...s,error:"NETWORK"}));}
       setTimeout(()=>{try{recRef.current?.start();}catch{}},300);};
     r.onend=()=>{if(active)setTimeout(()=>{try{recRef.current?.start();}catch{}},50);};
-    try{r.start();}catch(e){console.warn("Voice start failed:",e);}
-    setVs({listening:true,lastCommand:null});
+    try{r.start();}catch(e){console.warn("Voice start failed:",e);
+      setVs({listening:false,lastCommand:null,error:"START_FAILED"});}
+    setVs({listening:true,lastCommand:null,error:null});
     return()=>{try{recRef.current?.stop();}catch{}
       recRef.current=null;
       if(toRef.current)clearTimeout(toRef.current);};
@@ -657,12 +673,16 @@ export default function AsteroidSerpent(){
   const{chs,ann,types,chDone}=useChallenges(chMode,running);
 
   // Voice stays active while playing (even when paused) so "resume" works
+  const pausedRef=useRef(paused);pausedRef.current=paused;
   const vState=useVoice(inp==="voice"&&screen==="playing",
     useCallback(cmd=>{if(cmd==="PAUSE")setPaused(true);
       else if(cmd==="RESUME")setPaused(false);
       else if(cmd==="CHALLENGE")setChMode(c=>!c);
-      else if(["UP","DOWN","LEFT","RIGHT"].includes(cmd))
-        if(OPP[cmd]!==nDir.current)nDir.current=cmd;},[screen]));
+      else if(["UP","DOWN","LEFT","RIGHT"].includes(cmd)){
+        // Ignore direction commands while paused
+        if(pausedRef.current)return;
+        if(OPP[cmd]!==nDir.current)nDir.current=cmd;}
+    },[screen]));
 
   const gDir=useGesture(inp==="gesture"&&running,
     useCallback(d=>{if(OPP[d]!==nDir.current)nDir.current=d;},[]) );
