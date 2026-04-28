@@ -761,7 +761,8 @@ export default function AsteroidSerpent(){
     }
     if(e.key===" "&&screen==="playing"){e.preventDefault();setPaused(p=>!p);}
     if(e.key==="c"||e.key==="C")setChMode(c=>!c);
-    if(e.key==="m"||e.key==="M")setCamMode(c=>c==="top-down"?"follow":c==="follow"?"cinematic":"top-down");};
+    if(e.key==="m"||e.key==="M")setCamMode(c=>c==="top-down"?"follow":c==="follow"?"cinematic":"top-down");
+    if(e.key==="g"||e.key==="G")setInp(p=>p==="gesture"?"keyboard":"gesture");};
     window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[screen,wsConnected,sendCommand]);
 
   // Auto-tick for C backend
