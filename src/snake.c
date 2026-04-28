@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #define BOARD_WIDTH 78
 #define BOARD_HEIGHT 20
@@ -207,6 +208,56 @@ static int game_over = 0;
 static int score = 0;
 static int foods_eaten = 0;
 
+/* High score tracking — persists across restarts via file. */
+static int g_high_score = 0;
+#define HIGHSCORE_FILE ".snake_highscore"
+
+/* Loads high score from file using POSIX I/O (no stdio). */
+static void highscore_load(void)
+{
+    int fd;
+    int val;
+    int bytes_read;
+
+    fd = open(HIGHSCORE_FILE, O_RDONLY);
+    if (fd < 0) {
+        g_high_score = 0;
+        return;
+    }
+    val = 0;
+    bytes_read = (int)read(fd, &val, (int)sizeof(int));
+    close(fd);
+    if (bytes_read == (int)sizeof(int) && val > 0) {
+        g_high_score = val;
+    } else {
+        g_high_score = 0;
+    }
+}
+
+/* Saves high score to file using POSIX I/O (no stdio). */
+static void highscore_save(void)
+{
+    int fd;
+
+    fd = open(HIGHSCORE_FILE, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        return;
+    }
+    write(fd, &g_high_score, (int)sizeof(int));
+    close(fd);
+}
+
+/* Updates high score if current score beats it. Returns 1 if new record. */
+static int highscore_update(void)
+{
+    if (score > g_high_score) {
+        g_high_score = score;
+        highscore_save();
+        return 1;
+    }
+    return 0;
+}
+
 /* Global snake pointer so food_spawn can check the head position. */
 static Snake *g_snake = 0;
 
@@ -281,7 +332,14 @@ static void score_draw(void)
     my_int_to_str(speed_level, num);
     my_strcpy(buf + len, num);
 
-    /* Step 5: draw the combined string on the score row. */
+    /* Step 5: append "  HIGH: <n>" to show the all-time high score. */
+    len = my_strlen(buf);
+    my_strcpy(buf + len, "  HIGH: ");
+    len = my_strlen(buf);
+    my_int_to_str(g_high_score, num);
+    my_strcpy(buf + len, num);
+
+    /* Step 6: draw the combined string on the score row. */
     screen_set_color(g_themes[g_current_theme_idx].text);
     screen_draw_string(2, SCORE_ROW, buf);
     screen_reset_color();
@@ -631,6 +689,7 @@ void show_game_over(void)
     char line0[32];
     char line1[40];
     char line2[40];
+    char line_hi[40];
     char line3[32];
     char line4[32];
     char num[16];
@@ -642,6 +701,10 @@ void show_game_over(void)
     int i;
     int y;
     int lx;
+    int is_new_record;
+
+    /* Update high score before displaying. */
+    is_new_record = highscore_update();
 
     my_strcpy(line0, "  GAME OVER  ");
 
@@ -655,6 +718,16 @@ void show_game_over(void)
     my_strcpy(line2 + my_strlen(line2), num);
     my_strcpy(line2 + my_strlen(line2), " ");
 
+    /* High score line — show NEW RECORD or the existing high. */
+    if (is_new_record) {
+        my_strcpy(line_hi, " ** NEW HIGH SCORE! ** ");
+    } else {
+        my_strcpy(line_hi, "  BEST: ");
+        my_int_to_str(g_high_score, num);
+        my_strcpy(line_hi + my_strlen(line_hi), num);
+        my_strcpy(line_hi + my_strlen(line_hi), " ");
+    }
+
     my_strcpy(line3, " [R] Restart ");
     my_strcpy(line4, " [Q]  Quit   ");
 
@@ -664,6 +737,10 @@ void show_game_over(void)
         maxw = i;
     }
     i = my_strlen(line2);
+    if (i > maxw) {
+        maxw = i;
+    }
+    i = my_strlen(line_hi);
     if (i > maxw) {
         maxw = i;
     }
@@ -677,7 +754,7 @@ void show_game_over(void)
     }
 
     inner_w = maxw;
-    box_h = 2 + 5;
+    box_h = 2 + 6;  /* One extra line for the high score */
     box_x = (BOARD_WIDTH - (inner_w + 2)) / 2 + 1;
     box_y = (BOARD_HEIGHT - box_h) / 2 + 1;
     if (box_x < 2) {
@@ -717,6 +794,16 @@ void show_game_over(void)
     y++;
     lx = box_x + 1 + (inner_w - my_strlen(line2)) / 2;
     screen_draw_string(lx, y, line2);
+    y++;
+    /* High score line — use head color for NEW RECORD highlight. */
+    if (is_new_record) {
+        screen_set_color(g_themes[g_current_theme_idx].head);
+    }
+    lx = box_x + 1 + (inner_w - my_strlen(line_hi)) / 2;
+    screen_draw_string(lx, y, line_hi);
+    if (is_new_record) {
+        screen_set_color(g_themes[g_current_theme_idx].text);
+    }
     y++;
     lx = box_x + 1 + (inner_w - my_strlen(line3)) / 2;
     screen_draw_string(lx, y, line3);
@@ -920,6 +1007,9 @@ int main(void)
 
     keyboard_init();
     screen_init();
+
+    /* Load high score from file before starting. */
+    highscore_load();
 
     game_reset();
 
