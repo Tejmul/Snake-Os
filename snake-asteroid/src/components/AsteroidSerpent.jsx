@@ -530,36 +530,52 @@ function GameOver({st,onRestart,onMenu}){
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
-   8. VOICE HOOK
+   8. VOICE HOOK — LOW-LATENCY (~200-400ms for directions)
+   Interim results fire direction commands instantly (single words).
+   System commands (pause/resume/challenge) only fire on final results.
+   300ms debounce prevents duplicate triggers from the same utterance.
    ═══════════════════════════════════════════════════════════════════════════════ */
+const FAST_CMDS=new Set(["LEFT","RIGHT","UP","DOWN"]); // fire on interim for speed
 function useVoice(active,onCmd){
   const[vs,setVs]=useState({listening:false,lastCommand:null});
   const recRef=useRef(null),toRef=useRef(null);
   const onCmdRef=useRef(onCmd);
+  const lastFired=useRef({cmd:null,time:0}); // debounce tracker
   useEffect(()=>{onCmdRef.current=onCmd;},[onCmd]);
+
+  const fireCmd=useCallback((cm)=>{
+    const now=Date.now();
+    // debounce: skip if same command fired within 300ms
+    if(lastFired.current.cmd===cm&&now-lastFired.current.time<300)return;
+    lastFired.current={cmd:cm,time:now};
+    onCmdRef.current(cm);setVs({listening:true,lastCommand:cm});
+    if(toRef.current)clearTimeout(toRef.current);
+    toRef.current=setTimeout(()=>setVs(s=>({...s,lastCommand:null})),1400);
+  },[]);
+
   useEffect(()=>{
     if(!active){try{recRef.current?.stop();}catch{}recRef.current=null;
       setVs({listening:false,lastCommand:null});return;}
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){console.warn("SpeechRecognition not supported");return;}
-    const r=new SR();r.continuous=true;r.interimResults=false;r.lang="en-US";
-    r.maxAlternatives=3;recRef.current=r;
+    const r=new SR();r.continuous=true;r.interimResults=true;r.lang="en-US";
+    r.maxAlternatives=1;recRef.current=r;
     r.onresult=(ev)=>{for(let i=ev.resultIndex;i<ev.results.length;i++){
-      if(!ev.results[i].isFinal)continue;
+      const isFinal=ev.results[i].isFinal;
       const t=ev.results[i][0].transcript.trim().toLowerCase();
       for(const[ph,cm]of VMAP_ENTRIES){if(t.includes(ph)){
-        onCmdRef.current(cm);setVs({listening:true,lastCommand:cm});
-        if(toRef.current)clearTimeout(toRef.current);
-        toRef.current=setTimeout(()=>setVs(s=>({...s,lastCommand:null})),1400);break;}}}};
+        // Direction commands fire on interim (fast); system commands wait for final
+        if(FAST_CMDS.has(cm)||isFinal)fireCmd(cm);
+        break;}}}};
     r.onerror=(ev)=>{if(ev.error==="not-allowed"||ev.error==="service-not-allowed")return;
-      setTimeout(()=>{try{recRef.current?.start();}catch{}},500);};
-    r.onend=()=>{if(active)setTimeout(()=>{try{recRef.current?.start();}catch{}},150);};
+      setTimeout(()=>{try{recRef.current?.start();}catch{}},300);};
+    r.onend=()=>{if(active)setTimeout(()=>{try{recRef.current?.start();}catch{}},50);};
     try{r.start();}catch(e){console.warn("Voice start failed:",e);}
     setVs({listening:true,lastCommand:null});
     return()=>{try{recRef.current?.stop();}catch{}
       recRef.current=null;
       if(toRef.current)clearTimeout(toRef.current);};
-  },[active]);return vs;
+  },[active,fireCmd]);return vs;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
