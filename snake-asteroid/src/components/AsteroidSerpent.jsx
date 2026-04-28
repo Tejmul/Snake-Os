@@ -422,11 +422,11 @@ function FallingAsteroids({active}){
 
 function Cam({snake,dir,mode}){
   const{camera}=useThree();
-  const tPos=useRef(new THREE.Vector3(G/2,G*.8,G/2+G*.3));
+  const tPos=useRef(new THREE.Vector3(G/2,G*1.05,G/2+G*.15));
   const tLook=useRef(new THREE.Vector3(G/2,0,G/2));
   useFrame(()=>{if(!snake?.length)return;
     const h=snake[0],hx=h.x+.5,hz=h.y+.5;
-    if(mode==="top-down"){tPos.current.set(G/2,G*.82,G/2+G*.32);tLook.current.set(G/2,0,G/2);}
+    if(mode==="top-down"){tPos.current.set(G/2,G*1.05,G/2+G*.15);tLook.current.set(G/2,0,G/2);}
     else if(mode==="follow"){const d=D[dir]||D.RIGHT;
       tPos.current.set(hx-d.x*9,8,hz+d.y*9);tLook.current.set(hx+d.x*3,0,hz-d.y*3);}
     else{const t=Date.now()/1000,ph=Math.floor(t/5.5)%4;
@@ -728,7 +728,7 @@ export default function AsteroidSerpent(){
   return<div className="root">
     <div className={`scan-ov ${chMode&&running?"on":""}`}/>
     <div className="cvs">
-      <Canvas camera={{position:[G/2,G*.82,G/2+G*.32],fov:52}} shadows
+      <Canvas camera={{position:[G/2,G*1.05,G/2+G*.15],fov:58}} shadows
         gl={{antialias:true,alpha:false,powerPreference:"high-performance",
           toneMapping:THREE.ACESFilmicToneMapping,toneMappingExposure:.85}} dpr={[1,1.5]}>
         <color attach="background" args={["#030308"]}/>
