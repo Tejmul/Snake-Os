@@ -9,12 +9,12 @@
 #include <fcntl.h>
 
 #define BOARD_WIDTH 78
-#define BOARD_HEIGHT 20
+#define BOARD_HEIGHT 21
 
-#define SCORE_ROW 1
+#define SCORE_ROW 2
 #define PLAY_MIN_X 2
 #define PLAY_MAX_X (BOARD_WIDTH - 1)
-#define PLAY_MIN_Y 3
+#define PLAY_MIN_Y 4
 #define PLAY_MAX_Y (BOARD_HEIGHT - 1)
 
 #define FOOD_CHAR '*'
@@ -302,26 +302,26 @@ static void score_draw(void)
     int d;
     int speed_level;
 
-    /* Step 1: clear the score row. */
-    x = 1;
-    while (x <= BOARD_WIDTH) {
+    /* Step 1: clear the score row content area. */
+    x = 2;
+    while (x < BOARD_WIDTH) {
         screen_draw_char(x, SCORE_ROW, ' ');
         x++;
     }
 
-    /* Step 2: build "SCORE: <n>" using manual string concat. */
-    my_strcpy(buf, "SCORE: ");
+    /* Step 3: build "FOOD: <n>" using manual string concat. */
+    my_strcpy(buf, " FOOD: ");
     my_int_to_str(score, num);
     my_strcpy(buf + my_strlen(buf), num);
 
-    /* Step 3: append "  LENGTH: <n>" to the same buffer. */
+    /* Step 4: append "  LENGTH: <n>" to the same buffer. */
     len = my_strlen(buf);
     my_strcpy(buf + len, "  LENGTH: ");
     len = my_strlen(buf);
     my_int_to_str(snake_length + 1, num);
     my_strcpy(buf + len, num);
 
-    /* Step 4: append "  SPEED: <1..5>" from delay (math.c only). */
+    /* Step 5: append "  SPEED: <1..5>" from delay (math.c only). */
     d = get_delay(score);
     speed_level = my_div(my_div(150000 - d, 10000), 1);
     speed_level = speed_level + 1;
@@ -332,14 +332,14 @@ static void score_draw(void)
     my_int_to_str(speed_level, num);
     my_strcpy(buf + len, num);
 
-    /* Step 5: append "  HIGH: <n>" to show the all-time high score. */
+    /* Step 6: append "  HIGH: <n>" to show the all-time high score. */
     len = my_strlen(buf);
     my_strcpy(buf + len, "  HIGH: ");
     len = my_strlen(buf);
     my_int_to_str(g_high_score, num);
     my_strcpy(buf + len, num);
 
-    /* Step 6: draw the combined string on the score row. */
+    /* Step 7: draw the combined string on the score row. */
     screen_set_color(g_themes[g_current_theme_idx].text);
     screen_draw_string(2, SCORE_ROW, buf);
     screen_reset_color();
@@ -464,7 +464,7 @@ static void food_eat(void)
         return;
     }
 
-    score_add(10);
+    score_add(1);
     foods_eaten += 1;
     just_ate = 1;
     g_food->active = 0;
@@ -686,130 +686,146 @@ void game_reset(void)
  */
 void show_game_over(void)
 {
-    char line0[32];
-    char line1[40];
-    char line2[40];
+    char line_score[40];
+    char line_len[40];
     char line_hi[40];
-    char line3[32];
-    char line4[32];
     char num[16];
-    int maxw;
+    int box_w;
     int box_x;
     int box_y;
     int box_h;
     int inner_w;
-    int i;
     int y;
     int lx;
+    int cx;
     int is_new_record;
 
     /* Update high score before displaying. */
     is_new_record = highscore_update();
 
-    my_strcpy(line0, "  GAME OVER  ");
-
-    my_strcpy(line1, "  SCORE: ");
+    /* Build stat strings. */
+    my_strcpy(line_score, "FOOD: ");
     my_int_to_str(score, num);
-    my_strcpy(line1 + my_strlen(line1), num);
-    my_strcpy(line1 + my_strlen(line1), " ");
+    my_strcpy(line_score + my_strlen(line_score), num);
 
-    my_strcpy(line2, "  LENGTH: ");
+    my_strcpy(line_len, "LENGTH: ");
     my_int_to_str(snake_length + 1, num);
-    my_strcpy(line2 + my_strlen(line2), num);
-    my_strcpy(line2 + my_strlen(line2), " ");
+    my_strcpy(line_len + my_strlen(line_len), num);
 
-    /* High score line — show NEW RECORD or the existing high. */
     if (is_new_record) {
-        my_strcpy(line_hi, " ** NEW HIGH SCORE! ** ");
+        my_strcpy(line_hi, "** NEW HIGH SCORE! **");
     } else {
-        my_strcpy(line_hi, "  BEST: ");
+        my_strcpy(line_hi, "BEST: ");
         my_int_to_str(g_high_score, num);
         my_strcpy(line_hi + my_strlen(line_hi), num);
-        my_strcpy(line_hi + my_strlen(line_hi), " ");
     }
 
-    my_strcpy(line3, " [R] Restart ");
-    my_strcpy(line4, " [Q]  Quit   ");
-
-    maxw = my_strlen(line0);
-    i = my_strlen(line1);
-    if (i > maxw) {
-        maxw = i;
-    }
-    i = my_strlen(line2);
-    if (i > maxw) {
-        maxw = i;
-    }
-    i = my_strlen(line_hi);
-    if (i > maxw) {
-        maxw = i;
-    }
-    i = my_strlen(line3);
-    if (i > maxw) {
-        maxw = i;
-    }
-    i = my_strlen(line4);
-    if (i > maxw) {
-        maxw = i;
-    }
-
-    inner_w = maxw;
-    box_h = 2 + 6;  /* One extra line for the high score */
-    box_x = (BOARD_WIDTH - (inner_w + 2)) / 2 + 1;
+    /*
+     * Box layout (18 rows total):
+     *  Row 0:  top border  ╔════════════════════════╗
+     *  Row 1:  empty
+     *  Row 2:  skull line 1:    _____
+     *  Row 3:  skull line 2:   /     \
+     *  Row 4:  skull line 3:  | X   X |
+     *  Row 5:  skull line 4:  |   ^   |
+     *  Row 6:  skull line 5:   \_____/
+     *  Row 7:  GAME OVER title
+     *  Row 8:  separator    ╠════════════════════════╣
+     *  Row 9:  FOOD
+     *  Row 10: LENGTH
+     *  Row 11: HIGH SCORE
+     *  Row 12: separator    ╠════════════════════════╣
+     *  Row 13: empty
+     *  Row 14: [R] Restart
+     *  Row 15: [Q] Quit
+     *  Row 16: empty
+     *  Row 17: bottom border ╚════════════════════════╝
+     */
+    box_w = 30;
+    box_h = 18;
+    inner_w = box_w - 2;
+    box_x = (BOARD_WIDTH - box_w) / 2 + 1;
     box_y = (BOARD_HEIGHT - box_h) / 2 + 1;
     if (box_x < 2) {
         box_x = 2;
     }
-    if (box_y < 2) {
-        box_y = 2;
+    if (box_y < 1) {
+        box_y = 1;
     }
 
+    /* Clear and redraw the outer game border. */
     screen_clear();
     screen_set_color(g_themes[g_current_theme_idx].border);
-    screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
-
-    i = 0;
-    while (i < inner_w + 2) {
-        screen_draw_char(box_x + i, box_y, '|');
-        screen_draw_char(box_x + i, box_y + box_h - 1, '|');
-        i++;
-    }
-
-    i = 1;
-    while (i < box_h - 1) {
-        screen_draw_char(box_x, box_y + i, '|');
-        screen_draw_char(box_x + inner_w + 1, box_y + i, '|');
-        i++;
-    }
+    screen_draw_box(1, 1, BOARD_WIDTH, BOARD_HEIGHT);
     screen_reset_color();
 
-    screen_set_color(g_themes[g_current_theme_idx].text);
+    /* Draw the game-over box with double-line border. */
+    screen_set_color(g_themes[g_current_theme_idx].border);
+    screen_draw_box(box_x, box_y, box_w, box_h);
 
-    y = box_y + 1;
-    lx = box_x + 1 + (inner_w - my_strlen(line0)) / 2;
-    screen_draw_string(lx, y, line0);
+    /* Separator after skull + title */
+    screen_draw_box_separator(box_x, box_y + 8, box_w);
+    /* Separator before actions */
+    screen_draw_box_separator(box_x, box_y + 12, box_w);
+    screen_reset_color();
+
+    /* --- Skull ASCII art (centered) --- */
+    screen_set_color(g_themes[g_current_theme_idx].head);
+    y = box_y + 2;
+    cx = box_x + 1;
+
+    lx = cx + (inner_w - 5) / 2;
+    screen_draw_string(lx, y, "_____");
     y++;
-    lx = box_x + 1 + (inner_w - my_strlen(line1)) / 2;
-    screen_draw_string(lx, y, line1);
+    lx = cx + (inner_w - 7) / 2;
+    screen_draw_string(lx, y, "/     \\");
     y++;
-    lx = box_x + 1 + (inner_w - my_strlen(line2)) / 2;
-    screen_draw_string(lx, y, line2);
+    lx = cx + (inner_w - 9) / 2;
+    screen_draw_string(lx, y, "| X   X |");
     y++;
-    /* High score line — use head color for NEW RECORD highlight. */
+    lx = cx + (inner_w - 9) / 2;
+    screen_draw_string(lx, y, "|   ^   |");
+    y++;
+    lx = cx + (inner_w - 7) / 2;
+    screen_draw_string(lx, y, "\\_____/");
+    screen_reset_color();
+
+    /* --- GAME OVER title --- */
+    y = box_y + 7;
+    screen_set_color(g_themes[g_current_theme_idx].food);  /* Use food color (red/bright) for emphasis */
+    lx = cx + (inner_w - 9) / 2;
+    screen_draw_string(lx, y, "GAME OVER");
+    screen_reset_color();
+
+    /* --- Stats section --- */
+    y = box_y + 9;
+    screen_set_color(g_themes[g_current_theme_idx].text);
+    lx = cx + (inner_w - my_strlen(line_score)) / 2;
+    screen_draw_string(lx, y, line_score);
+    y++;
+    lx = cx + (inner_w - my_strlen(line_len)) / 2;
+    screen_draw_string(lx, y, line_len);
+    screen_reset_color();
+
+    /* High score / NEW RECORD (between separators at +8 and +12, rows 9-11). */
+    y = box_y + 11;
     if (is_new_record) {
         screen_set_color(g_themes[g_current_theme_idx].head);
-    }
-    lx = box_x + 1 + (inner_w - my_strlen(line_hi)) / 2;
-    screen_draw_string(lx, y, line_hi);
-    if (is_new_record) {
+    } else {
         screen_set_color(g_themes[g_current_theme_idx].text);
     }
+    lx = cx + (inner_w - my_strlen(line_hi)) / 2;
+    screen_draw_string(lx, y, line_hi);
+    screen_reset_color();
+
+    /* --- Actions section --- */
+    y = box_y + 14;
+    screen_set_color(g_themes[g_current_theme_idx].text);
+    lx = cx + (inner_w - 12) / 2;
+    screen_draw_string(lx, y, "[R]  Restart");
     y++;
-    lx = box_x + 1 + (inner_w - my_strlen(line3)) / 2;
-    screen_draw_string(lx, y, line3);
-    y++;
-    lx = box_x + 1 + (inner_w - my_strlen(line4)) / 2;
-    screen_draw_string(lx, y, line4);
+    lx = cx + (inner_w - 12) / 2;
+    screen_draw_string(lx, y, "[Q]  Quit");
     screen_reset_color();
 
     memory_dump();
@@ -930,6 +946,18 @@ static int game_loop(void)
         nx = g_snake->x + dir_x;
         ny = g_snake->y + dir_y;
 
+        /* Wrap around screen edges instead of colliding with the border. */
+        if (nx < PLAY_MIN_X) {
+            nx = BOARD_WIDTH - 1;
+        } else if (nx > BOARD_WIDTH - 1) {
+            nx = PLAY_MIN_X;
+        }
+        if (ny < PLAY_MIN_Y) {
+            ny = BOARD_HEIGHT - 1;
+        } else if (ny > BOARD_HEIGHT - 1) {
+            ny = PLAY_MIN_Y;
+        }
+
         /* 3. Collision checks — before moving. */
         check_all_collisions(nx, ny, g_food, BOARD_WIDTH, BOARD_HEIGHT);
         if (game_over) {
@@ -948,12 +976,11 @@ static int game_loop(void)
         }
         just_ate = 0;
 
-        /* 5. Survival bonus: +1 score per tick. */
-        score_add(1);
+        /* 5. Score changes only when food is eaten (handled in food_eat). */
 
         /* Level Transition check */
         {
-            int expected_level = my_div(score, 200) + 1;
+            int expected_level = my_div(score, 5) + 1;
             if (expected_level > current_level) {
                 /* Free old obstacles */
                 Obstacle *obs = g_obstacles;

@@ -19,8 +19,14 @@ void screen_draw_char(int x, int y, char c);
 /* Draws a null-terminated string at the given screen position. */
 void screen_draw_string(int x, int y, const char *s);
 
-/* Draws a rectangular border using '#' characters. */
+/* Draws a rectangular border using Unicode box-drawing characters. */
 void screen_draw_border(int width, int height);
+
+/* Draws a Unicode double-line box at arbitrary position. */
+void screen_draw_box(int bx, int by, int bw, int bh);
+
+/* Draws a horizontal separator inside a box using ╠═══╣. */
+void screen_draw_box_separator(int bx, int by, int bw);
 
 /* Flushes pending terminal output for the current frame. */
 void screen_present(void);

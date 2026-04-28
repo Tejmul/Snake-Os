@@ -24,15 +24,19 @@ void screen_clear(void)
 
 void screen_restore(void) {
 	if (!g_screen_initialized) return;
-	write_text("\033[?25h");
-	write_text("\033[?1049l");
+	write_text("\033[?7h");      /* Re-enable line wrapping */
+	write_text("\033[r");        /* Reset scroll region */
+	write_text("\033[?25h");     /* Show cursor */
+	write_text("\033[?1049l");   /* Restore main screen buffer */
 	g_screen_initialized = 0;
 }
 
 void screen_init(void) {
 	if (g_screen_initialized) return;
-	write_text("\033[?1049h");
-	write_text("\033[?25l");
+	write_text("\033[?1049h");   /* Switch to alternate screen buffer */
+	write_text("\033[?25l");     /* Hide cursor */
+	write_text("\033[?7l");      /* Disable line wrapping */
+	write_text("\033[1;999r");   /* Set scroll region to full screen (locks it) */
 	screen_clear();
 	atexit(screen_restore);
 	g_screen_initialized = 1;
@@ -79,7 +83,21 @@ void screen_draw_string(int x, int y, const char *s)
 	}
 }
 
-/* Draws a border box of the requested width and height using '#'. */
+/* Draws a UTF-8 string at the given screen position. */
+static void draw_utf8_at(int x, int y, const char *s)
+{
+	screen_move_cursor(x, y);
+	write_text(s);
+}
+
+/*
+ * Draws the game board border using Unicode double-line box-drawing characters.
+ * ╔═══════╗
+ * ║ SCORE ║
+ * ╠═══════╣
+ * ║       ║
+ * ╚═══════╝
+ */
 void screen_draw_border(int width, int height)
 {
 	int x;
@@ -89,18 +107,91 @@ void screen_draw_border(int width, int height)
 		return;
 	}
 
-	x = 1;
-	while (x <= width) {
-		screen_draw_char(x, 2, '|');
-		screen_draw_char(x, height, '|');
+	/* Top-left corner */
+	draw_utf8_at(1, 1, "\xe2\x95\x94");  /* ╔ */
+	/* Top-right corner */
+	draw_utf8_at(width, 1, "\xe2\x95\x97");  /* ╗ */
+	/* Middle-left tee */
+	draw_utf8_at(1, 3, "\xe2\x95\xa0");  /* ╠ */
+	/* Middle-right tee */
+	draw_utf8_at(width, 3, "\xe2\x95\xa3");  /* ╣ */
+	/* Bottom-left corner */
+	draw_utf8_at(1, height, "\xe2\x95\x9a");  /* ╚ */
+	/* Bottom-right corner */
+	draw_utf8_at(width, height, "\xe2\x95\x9d");  /* ╝ */
+
+	/* Top, middle, and bottom horizontal edges */
+	x = 2;
+	while (x < width) {
+		draw_utf8_at(x, 1, "\xe2\x95\x90");  /* ═ */
+		draw_utf8_at(x, 3, "\xe2\x95\x90");  /* ═ */
+		draw_utf8_at(x, height, "\xe2\x95\x90");  /* ═ */
 		x++;
 	}
 
-	y = 3;
+	/* Left and right vertical edges (score area) */
+	draw_utf8_at(1, 2, "\xe2\x95\x91");  /* ║ */
+	draw_utf8_at(width, 2, "\xe2\x95\x91");  /* ║ */
+
+	/* Left and right vertical edges (play area) */
+	y = 4;
 	while (y < height) {
-		screen_draw_char(1, y, '|');
-		screen_draw_char(width, y, '|');
+		draw_utf8_at(1, y, "\xe2\x95\x91");  /* ║ */
+		draw_utf8_at(width, y, "\xe2\x95\x91");  /* ║ */
 		y++;
+	}
+}
+
+/*
+ * Draws a Unicode double-line box at arbitrary position.
+ * Used for the game-over card.
+ */
+void screen_draw_box(int bx, int by, int bw, int bh)
+{
+	int x;
+	int y;
+
+	if (bw < 2 || bh < 2) {
+		return;
+	}
+
+	/* Corners */
+	draw_utf8_at(bx, by, "\xe2\x95\x94");  /* ╔ */
+	draw_utf8_at(bx + bw - 1, by, "\xe2\x95\x97");  /* ╗ */
+	draw_utf8_at(bx, by + bh - 1, "\xe2\x95\x9a");  /* ╚ */
+	draw_utf8_at(bx + bw - 1, by + bh - 1, "\xe2\x95\x9d");  /* ╝ */
+
+	/* Horizontal edges */
+	x = bx + 1;
+	while (x < bx + bw - 1) {
+		draw_utf8_at(x, by, "\xe2\x95\x90");  /* ═ */
+		draw_utf8_at(x, by + bh - 1, "\xe2\x95\x90");  /* ═ */
+		x++;
+	}
+
+	/* Vertical edges */
+	y = by + 1;
+	while (y < by + bh - 1) {
+		draw_utf8_at(bx, y, "\xe2\x95\x91");  /* ║ */
+		draw_utf8_at(bx + bw - 1, y, "\xe2\x95\x91");  /* ║ */
+		y++;
+	}
+}
+
+/*
+ * Draws a horizontal separator inside a box using ╠═══╣.
+ */
+void screen_draw_box_separator(int bx, int by, int bw)
+{
+	int x;
+
+	draw_utf8_at(bx, by, "\xe2\x95\xa0");  /* ╠ */
+	draw_utf8_at(bx + bw - 1, by, "\xe2\x95\xa3");  /* ╣ */
+
+	x = bx + 1;
+	while (x < bx + bw - 1) {
+		draw_utf8_at(x, by, "\xe2\x95\x90");  /* ═ */
+		x++;
 	}
 }
 
