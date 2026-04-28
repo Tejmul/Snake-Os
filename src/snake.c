@@ -90,16 +90,41 @@ void tail_pop_back(void)
     snake_length -= 1;
 }
 
+/* --- Theme System --- */
+typedef struct Theme {
+    int head;
+    int tail[4];         /* Array of 4 colors for fading effect */
+    int food;
+    int static_wall;
+    int moving_enemy;
+    int border;
+    int text;
+} Theme;
+
+static Theme g_themes[3] = {
+    /* Neon (Default) */
+    { 92, {96, 36, 94, 34}, 91, 35, 91, 35, 93 },
+    /* Matrix Green */
+    { 97, {92, 32, 32, 32}, 92, 32, 92, 32, 32 },
+    /* Classic B&W */
+    { 97, {97, 37, 90, 30}, 37, 37, 37, 37, 37 }
+};
+static int g_current_theme_idx = 0;
+
 /* Draws all tail segments as 'o'. (The snake head '@' is drawn separately.) */
 void tail_draw(void)
 {
     Segment *cur;
+    int index = 0;
+    int color_idx;
 
-    screen_set_color(36);
     cur = snake_head;
     while (cur != 0) {
+        color_idx = my_clamp(my_div(index, 4), 0, 3);
+        screen_set_color(g_themes[g_current_theme_idx].tail[color_idx]);
         screen_draw_char(cur->x, cur->y, 'o');
         cur = cur->next;
+        index++;
     }
     screen_reset_color();
 }
@@ -156,12 +181,13 @@ static int current_level = 1;
 void obstacles_draw(void)
 {
     Obstacle *obs = g_obstacles;
+    Theme *t = &g_themes[g_current_theme_idx];
     while (obs != 0) {
         if (obs->type == 0) {
-            screen_set_color(34); /* Blue for static walls */
+            screen_set_color(t->static_wall);
             screen_draw_char(obs->x, obs->y, '#');
         } else {
-            screen_set_color(94); /* Light blue for moving enemies */
+            screen_set_color(t->moving_enemy);
             screen_draw_char(obs->x, obs->y, 'M');
         }
         screen_reset_color();
@@ -256,7 +282,7 @@ static void score_draw(void)
     my_strcpy(buf + len, num);
 
     /* Step 5: draw the combined string on the score row. */
-    screen_set_color(33);
+    screen_set_color(g_themes[g_current_theme_idx].text);
     screen_draw_string(2, SCORE_ROW, buf);
     screen_reset_color();
 }
@@ -662,7 +688,7 @@ void show_game_over(void)
     }
 
     screen_clear();
-    screen_set_color(35);
+    screen_set_color(g_themes[g_current_theme_idx].border);
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
 
     i = 0;
@@ -680,7 +706,7 @@ void show_game_over(void)
     }
     screen_reset_color();
 
-    screen_set_color(33);
+    screen_set_color(g_themes[g_current_theme_idx].text);
 
     y = box_y + 1;
     lx = box_x + 1 + (inner_w - my_strlen(line0)) / 2;
@@ -772,17 +798,17 @@ static int game_loop(void)
 
     /* Initial render for this session (also used after restart). */
     screen_clear();
-    screen_set_color(34);
+    screen_set_color(g_themes[g_current_theme_idx].border);
     screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
     screen_reset_color();
     tail_draw();
     obstacles_draw();
     if (g_food->active) {
-        screen_set_color(91);
+        screen_set_color(g_themes[g_current_theme_idx].food);
         screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
         screen_reset_color();
     }
-    screen_set_color(92);
+    screen_set_color(g_themes[g_current_theme_idx].head);
     screen_draw_char(g_snake->x, g_snake->y, '@');
     screen_reset_color();
     score_draw();
@@ -797,6 +823,15 @@ static int game_loop(void)
             char key;
 
             key = read_key();
+            if (key == 't' || key == 'T') {
+                g_current_theme_idx = my_mod(g_current_theme_idx + 1, 3);
+                /* Full redraw instantly */
+                screen_clear();
+                screen_set_color(g_themes[g_current_theme_idx].border);
+                screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
+                screen_reset_color();
+                continue;
+            }
             if (key == 'q' || key == 'Q') {
                 running = 0;
                 return 0;
@@ -850,7 +885,7 @@ static int game_loop(void)
                 
                 /* Redraw screen border just to be safe */
                 screen_clear();
-                screen_set_color(34);
+                screen_set_color(g_themes[g_current_theme_idx].border);
                 screen_draw_border(BOARD_WIDTH, BOARD_HEIGHT);
                 screen_reset_color();
             }
@@ -862,11 +897,11 @@ static int game_loop(void)
         tail_draw();
         obstacles_draw();
         if (g_food->active) {
-            screen_set_color(91);
+            screen_set_color(g_themes[g_current_theme_idx].food);
             screen_draw_char(g_food->x, g_food->y, FOOD_CHAR);
             screen_reset_color();
         }
-        screen_set_color(92);
+        screen_set_color(g_themes[g_current_theme_idx].head);
         screen_draw_char(g_snake->x, g_snake->y, '@');
         screen_reset_color();
         score_draw();

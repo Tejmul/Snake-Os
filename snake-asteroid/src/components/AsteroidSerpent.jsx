@@ -175,7 +175,7 @@ body{background:var(--void);overflow:hidden;font-family:'Rajdhani',sans-serif;co
    1. CONSTANTS
    ═══════════════════════════════════════════════════════════════════════════════ */
 const G=30,SPD0=145,SPDMIN=50,SPDINC=4;
-const D={UP:{x:0,y:1},DOWN:{x:0,y:-1},LEFT:{x:-1,y:0},RIGHT:{x:1,y:0}};
+const D={UP:{x:0,y:-1},DOWN:{x:0,y:1},LEFT:{x:-1,y:0},RIGHT:{x:1,y:0}};
 const OPP={UP:"DOWN",DOWN:"UP",LEFT:"RIGHT",RIGHT:"LEFT"};
 const FOOD={
   normal:{pts:10,color:"#ff6a00",p:.6},golden:{pts:50,color:"#ffd600",p:.1},
