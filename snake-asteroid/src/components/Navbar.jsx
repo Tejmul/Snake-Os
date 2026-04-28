@@ -35,6 +35,7 @@ export default function Navbar() {
       <div style={{ display: "flex", gap: "30px", alignItems: "center" }}>
         <a
           href="#home"
+          className="cursor-target"
           style={{
             color: "#00d4ff",
             textDecoration: "none",
@@ -57,6 +58,7 @@ export default function Navbar() {
         </a>
         <a
           href="#features"
+          className="cursor-target"
           style={{
             color: "rgba(255, 255, 255, 0.7)",
             textDecoration: "none",
@@ -78,6 +80,7 @@ export default function Navbar() {
         </a>
         <a
           href="#about"
+          className="cursor-target"
           style={{
             color: "rgba(255, 255, 255, 0.7)",
             textDecoration: "none",

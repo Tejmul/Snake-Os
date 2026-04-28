@@ -8,6 +8,10 @@ const Hyperspeed = dynamic(() => import("./Hyperspeed"), {
   ssr: false,
 });
 
+const TargetCursor = dynamic(() => import("./TargetCursor"), {
+  ssr: false,
+});
+
 export default function HomePage({ 
   onStartGame, 
   challengeMode, 
@@ -114,6 +118,12 @@ export default function HomePage({
       `}</style>
 
       <Hyperspeed effectOptions={hyperspeedOptions} />
+      <TargetCursor 
+        spinDuration={2.5}
+        hideDefaultCursor={true}
+        parallaxOn={true}
+        hoverDuration={0.3}
+      />
 
       <div
         style={{
@@ -153,6 +163,7 @@ export default function HomePage({
           }}
         >
           <h1
+            className="cursor-target"
             style={{
               fontSize: showMenu
                 ? "clamp(38px, 7vw, 88px)"
@@ -168,6 +179,7 @@ export default function HomePage({
               animation: showMenu ? "none" : "float 3s ease-in-out infinite",
               transition: "all 0.5s ease",
               textAlign: showMenu ? "left" : "center",
+              cursor: "default",
             }}
           >
             ASTEROID
@@ -186,6 +198,7 @@ export default function HomePage({
               }}
             >
               <button
+                className="cursor-target"
                 onClick={() => setShowMenu(true)}
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
@@ -216,6 +229,7 @@ export default function HomePage({
               </button>
 
               <button
+                className="cursor-target"
                 onClick={() => {
                   const featuresSection = document.getElementById("features");
                   featuresSection?.scrollIntoView({ behavior: "smooth" });
@@ -292,6 +306,7 @@ export default function HomePage({
             </div>
 
             <button
+              className="cursor-target"
               onClick={onStartGame}
               style={{
                 padding: "18px 60px",
@@ -322,6 +337,7 @@ export default function HomePage({
             </button>
 
             <button
+              className="cursor-target"
               onClick={onToggleChallengeMode}
               style={{
                 padding: "18px 60px",
@@ -354,6 +370,7 @@ export default function HomePage({
             </button>
 
             <button
+              className="cursor-target"
               onClick={() =>
                 onSetInputMode(inputMode === "keyboard" ? "gamepad" : "keyboard")
               }
@@ -387,6 +404,7 @@ export default function HomePage({
             </button>
 
             <button
+              className="cursor-target"
               onClick={() => setShowMenu(false)}
               style={{
                 marginTop: "20px",
@@ -509,6 +527,7 @@ export default function HomePage({
             ].map((feature, i) => (
               <div
                 key={i}
+                className="cursor-target"
                 style={{
                   padding: "40px",
                   background: "rgba(0, 212, 255, 0.05)",
