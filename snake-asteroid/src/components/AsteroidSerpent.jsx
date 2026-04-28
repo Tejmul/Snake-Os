@@ -773,15 +773,16 @@ export default function AsteroidSerpent(){
     if(e.key==="g"||e.key==="G")setInp(p=>p==="gesture"?"keyboard":"gesture");};
     window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[screen,wsConnected,sendCommand]);
 
-  // Auto-tick for C backend
+  // Auto-tick for C backend — send tick commands at game speed
+  // Note: don't gate on cState?.alive — after reset, cState is stale until first tick response
   useEffect(() => {
-    if (USE_C_BACKEND && wsConnected && screen === "playing" && !paused && cState?.alive) {
+    if (USE_C_BACKEND && wsConnected && screen === "playing" && !paused && gs.alive) {
       const interval = setInterval(() => {
         sendCommand("tick");
       }, gs.spd || 145);
       return () => clearInterval(interval);
     }
-  }, [USE_C_BACKEND, wsConnected, screen, paused, cState?.alive, sendCommand, gs.spd]);
+  }, [wsConnected, screen, paused, gs.alive, sendCommand, gs.spd]);
 
   // Sync C backend state to local state
   useEffect(() => {
@@ -831,10 +832,12 @@ export default function AsteroidSerpent(){
 
   const startGame=useCallback(()=>{
     snd.init();
+    // Always reset local state so gs.alive=true (unblocks auto-tick)
+    setGs(mkState());
     if(USE_C_BACKEND && wsConnected) {
       sendCommand("reset");
-    } else {
-      setGs(mkState());
+      // Send immediate first tick so C backend responds with fresh state
+      setTimeout(() => sendCommand("tick"), 50);
     }
     nDir.current="RIGHT";
     t0.current=Date.now();setExps([]);setPaused(false);setScreen("playing");
