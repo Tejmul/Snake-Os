@@ -521,7 +521,7 @@ function useWebSocket(active) {
 /* ═══════════════════════════════════════════════════════════════════════════════
    5. HUD + MINIMAP
    ═══════════════════════════════════════════════════════════════════════════════ */
-function HUD({st,inp,onCycleInp,vState,gDir,chs,chMode,backend,wsConnected}){
+function HUD({st,inp,onCycleInp,vState,gDir,gStatus,gError,gInfo,chs,chMode,backend,wsConnected}){
   const t=Math.floor(st.timeAlive||0);
   const mm=String(Math.floor(t/60)).padStart(2,"0"),ss=String(t%60).padStart(2,"0");
   return<div className="ui">
@@ -547,8 +547,16 @@ function HUD({st,inp,onCycleInp,vState,gDir,chs,chMode,backend,wsConnected}){
          vState?.error==="NETWORK"?"NETWORK ERROR — retrying...":
          vState?.error?"ERROR — retrying...":
          vState?.lastCommand||"listening..."}</div></div>}
-    {inp==="gesture"&&<div className="g-ind"><div className="g-arr">
-      {gDir==="UP"?"↑":gDir==="DOWN"?"↓":gDir==="LEFT"?"←":gDir==="RIGHT"?"→":"✋"}</div></div>}
+    {inp==="gesture"&&<div className="g-ind"><div className="g-arr"
+      style={gStatus==="loading"?{borderColor:"var(--gold)",animation:"none"}:
+             gStatus==="error"?{borderColor:"var(--red)",animation:"none"}:{}}>
+      {gStatus==="loading"?"⏳":gStatus==="error"?"⚠️":
+       gDir==="UP"?"👍":gDir==="DOWN"?"👎":gDir==="LEFT"?"👈":gDir==="RIGHT"?"👉":"✋"}</div>
+      <div className="v-cmd on" style={{color:"var(--cyan)"}}>
+        {gStatus==="error"?(gError==="CAMERA_DENIED"?"CAM BLOCKED":"CAM ERROR"):
+         gStatus==="loading"?"LOADING MODEL...":
+         gInfo?.rawGesture?`${gInfo.rawGesture} · ${Math.round((gInfo.confidence||0)*100)}%`:"READY [G] toggle"}
+      </div></div>}
     {chs.length>0&&<div className="ch-bar">{chs.map((c,i)=><div key={i} className="ch-card">
       <div className="ch-nm">⚠ {c.name}</div>
       <div className="ch-tb"><div className="ch-tf" style={{width:(c.remaining/c.dur)*100+"%"}}/></div>
