@@ -171,6 +171,14 @@ body{background:var(--void);overflow:hidden;font-family:'Rajdhani',sans-serif;co
 .pause-txt{font-family:'Orbitron',monospace;font-size:44px;font-weight:900;
   color:var(--cyan);text-shadow:0 0 30px rgba(0,229,255,.4);letter-spacing:8px}
 
+.back-btn{position:fixed;top:20px;left:20px;z-index:50;padding:12px 24px;
+  font-family:'Orbitron',monospace;font-size:14px;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;border:2px solid rgba(255,255,255,0.3);
+  background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);color:rgba(255,255,255,0.8);
+  cursor:pointer;transition:all 0.3s ease;border-radius:0}
+.back-btn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,0.1);
+  transform:translateX(-3px)}
+
 .scan-ov{position:fixed;inset:0;z-index:4;pointer-events:none;
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 4px);
   opacity:0;transition:opacity .6s}.scan-ov.on{opacity:1}
@@ -611,7 +619,7 @@ function Home({onStart,chMode,onToggleCh,inp,onSetInp}){
   </div>;
 }
 
-function GameOver({st,onRestart,onMenu}){
+function GameOver({st,onRestart,onExit}){
   return<div className="go-scr"><div className="go-title">GAME OVER</div>
     <div className="go-stats">
       {[["SCORE",st.sc],["LENGTH",st.len],["TIME",Math.floor(st.timeAlive||0)+"s"],
@@ -621,7 +629,7 @@ function GameOver({st,onRestart,onMenu}){
     </div>
     <div className="go-btns">
       <button className="hb go" onClick={onRestart}>▶ PLAY AGAIN</button>
-      <button className="hb inp" onClick={onMenu}>◀ MENU</button>
+      {onExit&&<button className="hb inp" onClick={onExit}>◀ HOME</button>}
     </div></div>;
 }
 
@@ -709,15 +717,15 @@ function useChallenges(active,running){
 /* ═══════════════════════════════════════════════════════════════════════════════
    11. MAIN
    ═══════════════════════════════════════════════════════════════════════════════ */
-export default function AsteroidSerpent(){
+export default function AsteroidSerpent({ initialChallengeMode = false, initialInputMode = "keyboard", onExit }){
   useEffect(()=>{const s=document.createElement("style");s.textContent=CSS;
     document.head.appendChild(s);return()=>document.head.removeChild(s);},[]);
 
-  const[screen,setScreen]=useState("menu");
+  const[screen,setScreen]=useState("playing");
   const[gs,setGs]=useState(mkState);
   const[paused,setPaused]=useState(false);
-  const[chMode,setChMode]=useState(false);
-  const[inp,setInp]=useState("keyboard");
+  const[chMode,setChMode]=useState(initialChallengeMode);
+  const[inp,setInp]=useState(initialInputMode);
   const[camMode,setCamMode]=useState("top-down");
   const[exps,setExps]=useState([]);
   const nDir=useRef("RIGHT"),tickRef=useRef(null),t0=useRef(0);
@@ -877,10 +885,9 @@ export default function AsteroidSerpent(){
       backend={USE_C_BACKEND?"C":"JS"} wsConnected={wsConnected}/>}
     {ann&&<div className="ann">⚠ {ann}</div>}
     {screen==="playing"&&paused&&<div className="pause-ov"><div className="pause-txt">PAUSED</div></div>}
-    {screen==="menu"&&<Home onStart={startGame} chMode={chMode}
-      onToggleCh={()=>setChMode(c=>!c)} inp={inp} onSetInp={setInp}/>}
+    {screen==="playing"&&onExit&&<button className="back-btn" onClick={onExit}>◀ EXIT</button>}
     {screen==="gameover"&&<GameOver st={{...gs,chDone}}
-      onRestart={startGame} onMenu={()=>setScreen("menu")}/>}
+      onRestart={startGame} onExit={onExit}/>}
     {typeof window!=="undefined"&&"ontouchstart"in window&&screen==="playing"&&
       <div className="dpad">
         <div className="dp u" onTouchStart={()=>{nDir.current="UP";}}>↑</div>
