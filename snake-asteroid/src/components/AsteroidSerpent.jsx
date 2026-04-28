@@ -11,6 +11,12 @@ import {
 import * as THREE from "three";
 
 /* ═══════════════════════════════════════════════════════════════════════════════
+   0. WEBSOCKET INTEGRATION
+   ═══════════════════════════════════════════════════════════════════════════════ */
+const WS_URL = "ws://localhost:8080";
+const USE_C_BACKEND = true; // Set to true to use C modules via WebSocket
+
+/* ═══════════════════════════════════════════════════════════════════════════════
    0. CSS — INJECTED ON MOUNT
    ═══════════════════════════════════════════════════════════════════════════════ */
 const CSS = `
@@ -98,6 +104,12 @@ body{background:var(--void);overflow:hidden;font-family:'Rajdhani',sans-serif;co
   border:1px solid rgba(0,229,255,.1);border-radius:8px;padding:9px 16px;
   cursor:pointer;transition:all .3s;text-transform:uppercase}
 .hud-tr:hover{border-color:var(--cyan);box-shadow:0 0 20px rgba(0,229,255,.25)}
+.hud-backend{position:absolute;top:70px;right:20px;font-family:'Orbitron',monospace;
+  font-size:10px;letter-spacing:2px;background:rgba(3,3,8,.7);
+  backdrop-filter:blur(14px);border:1px solid;border-radius:8px;padding:7px 14px}
+.hud-backend.c{color:var(--green);border-color:var(--green)}
+.hud-backend.js{color:var(--pink);border-color:var(--pink)}
+.hud-backend.disconnected{color:var(--red);border-color:var(--red)}
 .ch-bar{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
   display:flex;gap:10px}
 .ch-card{background:rgba(255,23,68,.1);backdrop-filter:blur(12px);
@@ -446,9 +458,69 @@ function PostFX({ch}){return<EffectComposer>
 </EffectComposer>;}
 
 /* ═══════════════════════════════════════════════════════════════════════════════
+   4.5 WEBSOCKET HOOK
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function useWebSocket(active) {
+  const [connected, setConnected] = useState(false);
+  const [cState, setCState] = useState(null);
+  const wsRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+  
+  const connect = useCallback(() => {
+    if (!USE_C_BACKEND || !active) return;
+    try {
+      const ws = new WebSocket(WS_URL);
+      ws.onopen = () => { 
+        console.log("✅ WebSocket connected to C backend");
+        setConnected(true); 
+      };
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "state") {
+            console.log("📥 Received state from C:", msg.data.alive ? "alive" : "dead", "score:", msg.data.score);
+            setCState(msg.data);
+          }
+        } catch (e) { console.error("Parse error:", e); }
+      };
+      ws.onclose = () => {
+        console.log("❌ WebSocket disconnected");
+        setConnected(false);
+        reconnectTimeoutRef.current = setTimeout(connect, 2000);
+      };
+      wsRef.current = ws;
+    } catch (error) {
+      reconnectTimeoutRef.current = setTimeout(connect, 2000);
+    }
+  }, [active]);
+  
+  useEffect(() => {
+    if (USE_C_BACKEND && active) {
+      connect();
+      return () => {
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        if (wsRef.current) wsRef.current.close();
+      };
+    }
+  }, [connect, active]);
+  
+  const sendCommand = useCallback((type, data = {}) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg = JSON.stringify({ type, ...data });
+      console.log(`📤 Sending to C backend:`, msg);
+      wsRef.current.send(msg);
+    } else {
+      console.log(`❌ WebSocket not open. ReadyState:`, wsRef.current?.readyState);
+    }
+  }, []);
+  
+  return { connected, cState, sendCommand };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
    5. HUD + MINIMAP
    ═══════════════════════════════════════════════════════════════════════════════ */
-function HUD({st,inp,onCycleInp,vState,gDir,chs,chMode}){
+function HUD({st,inp,onCycleInp,vState,gDir,chs,chMode,backend,wsConnected}){
   const t=Math.floor(st.timeAlive||0);
   const mm=String(Math.floor(t/60)).padStart(2,"0"),ss=String(t%60).padStart(2,"0");
   return<div className="ui">
@@ -460,6 +532,10 @@ function HUD({st,inp,onCycleInp,vState,gDir,chs,chMode}){
         {chMode&&<span style={{color:"var(--mag)"}}>⚠ CHALLENGE</span>}</div></div>
     <div className="hud-tr" onClick={onCycleInp}>
       {inp==="keyboard"?"⌨ KEYBOARD":inp==="gesture"?"🤚 GESTURE":"🎙 VOICE"}</div>
+    {USE_C_BACKEND && <div className={`hud-backend ${wsConnected ? "c" : "disconnected"}`}>
+      {wsConnected ? "🔗 C BACKEND (math.c)" : "⚠ C SERVER OFFLINE"}
+    </div>}
+    {!USE_C_BACKEND && <div className="hud-backend js">⚡ JS MODE</div>}
     {inp==="voice"&&<div className="v-ind">
       <div className="v-mic" style={vState?.error?{borderColor:"var(--red)",animation:"none"}:
         !vState?.listening?{borderColor:"var(--dim)",animation:"none"}:{}}>
@@ -670,6 +746,9 @@ export default function AsteroidSerpent(){
   const nDir=useRef("RIGHT"),tickRef=useRef(null),t0=useRef(0);
   const running=screen==="playing"&&!paused;
 
+  // WebSocket integration for C backend
+  const { connected: wsConnected, cState, sendCommand } = useWebSocket(screen === "playing");
+
   const{chs,ann,types,chDone}=useChallenges(chMode,running);
 
   // Voice stays active while playing (even when paused) so "resume" works
@@ -691,13 +770,60 @@ export default function AsteroidSerpent(){
     const km={ArrowUp:"UP",w:"UP",W:"UP",ArrowDown:"DOWN",s:"DOWN",S:"DOWN",
       ArrowLeft:"LEFT",a:"LEFT",A:"LEFT",ArrowRight:"RIGHT",d:"RIGHT",D:"RIGHT"};
     const d=km[e.key];
-    if(d&&screen==="playing"){e.preventDefault();if(OPP[d]!==nDir.current)nDir.current=d;}
+    if(d&&screen==="playing"){
+      e.preventDefault();
+      if(OPP[d]!==nDir.current)nDir.current=d;
+      // Send to C backend
+      if(USE_C_BACKEND && wsConnected) {
+        const keyMap = {UP:"w",DOWN:"s",LEFT:"a",RIGHT:"d"};
+        console.log(`🎮 Sending direction: ${d} → C key: ${keyMap[d]}`);
+        sendCommand("direction", { key: keyMap[d] });
+      } else {
+        console.log(`⚠️ Not connected: USE_C_BACKEND=${USE_C_BACKEND}, wsConnected=${wsConnected}`);
+      }
+    }
     if(e.key===" "&&screen==="playing"){e.preventDefault();setPaused(p=>!p);}
     if(e.key==="c"||e.key==="C")setChMode(c=>!c);
     if(e.key==="m"||e.key==="M")setCamMode(c=>c==="top-down"?"follow":c==="follow"?"cinematic":"top-down");};
-    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[screen]);
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[screen,wsConnected,sendCommand]);
+
+  // Auto-tick for C backend
+  useEffect(() => {
+    if (USE_C_BACKEND && wsConnected && screen === "playing" && !paused && cState?.alive) {
+      const interval = setInterval(() => {
+        sendCommand("tick");
+      }, gs.spd || 145);
+      return () => clearInterval(interval);
+    }
+  }, [USE_C_BACKEND, wsConnected, screen, paused, cState?.alive, sendCommand, gs.spd]);
+
+  // Sync C backend state to local state
+  useEffect(() => {
+    if (USE_C_BACKEND && cState && wsConnected) {
+      // Build snake array from C backend data
+      const snakeArray = [cState.head, ...(cState.tail || [])];
+      setGs(prev => ({
+        ...prev,
+        sn: snakeArray,
+        dir: cState.dir || "RIGHT",
+        food: { x: cState.food.x, y: cState.food.y, type: ["normal","golden","speed","shrink"][cState.food.type] || "normal", pts: cState.food.pts },
+        sc: cState.score,
+        len: cState.length,
+        spd: cState.speed,
+        combo: cState.combo,
+        mxCombo: cState.maxCombo,
+        eaten: cState.eaten,
+        alive: cState.alive
+      }));
+      
+      if (!cState.alive) {
+        setTimeout(() => setScreen("gameover"), 700);
+      }
+    }
+  }, [cState, wsConnected]);
 
   useEffect(()=>{
+    if(USE_C_BACKEND) return; // Skip JS game loop if using C backend
     if(screen!=="playing"||paused){if(tickRef.current)clearInterval(tickRef.current);return;}
     const doTick=()=>{setGs(prev=>{if(!prev.alive)return prev;const now=Date.now();
       const rev=types.has("reverse_controls");const prevFood=prev.food;
@@ -717,8 +843,16 @@ export default function AsteroidSerpent(){
     return()=>{if(tickRef.current)clearInterval(tickRef.current);};
   },[screen,paused,gs.spd,types]);
 
-  const startGame=useCallback(()=>{snd.init();setGs(mkState());nDir.current="RIGHT";
-    t0.current=Date.now();setExps([]);setPaused(false);setScreen("playing");},[]);
+  const startGame=useCallback(()=>{
+    snd.init();
+    if(USE_C_BACKEND && wsConnected) {
+      sendCommand("reset");
+    } else {
+      setGs(mkState());
+    }
+    nDir.current="RIGHT";
+    t0.current=Date.now();setExps([]);setPaused(false);setScreen("playing");
+  },[wsConnected, sendCommand]);
 
   const hudSt=useMemo(()=>({sc:gs.sc,len:gs.len,spd:gs.spd,combo:gs.combo,
     mxCombo:gs.mxCombo,eaten:gs.eaten,timeAlive:gs.timeAlive||0,sn:gs.sn,food:gs.food}),[gs]);
@@ -750,7 +884,8 @@ export default function AsteroidSerpent(){
     {screen==="playing"&&<HUD st={hudSt} inp={inp}
       onCycleInp={()=>{const ms=["keyboard","gesture","voice"];
         setInp(ms[(ms.indexOf(inp)+1)%ms.length]);}}
-      vState={vState} gDir={gDir} chs={chs} chMode={chMode}/>}
+      vState={vState} gDir={gDir} chs={chs} chMode={chMode}
+      backend={USE_C_BACKEND?"C":"JS"} wsConnected={wsConnected}/>}
     {ann&&<div className="ann">⚠ {ann}</div>}
     {screen==="playing"&&paused&&<div className="pause-ov"><div className="pause-txt">PAUSED</div></div>}
     {screen==="menu"&&<Home onStart={startGame} chMode={chMode}

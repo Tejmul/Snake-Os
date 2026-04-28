@@ -1,0 +1,17 @@
+{
+  "name": "asteroid-serpent-websocket",
+  "version": "1.0.0",
+  "description": "WebSocket bridge for C-powered Snake game",
+  "main": "websocket-server.js",
+  "scripts": {
+    "server": "node websocket-server.js",
+    "build-c": "cd .. && make snake_server"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {},
+  "keywords": ["websocket", "snake", "c", "game"],
+  "author": "",
+  "license": "MIT"
+}

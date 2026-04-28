@@ -230,7 +230,7 @@ void my_dealloc(void *ptr)
 
 /*
  * Prints allocator summary for debugging.
- * Uses screen_draw_string to keep output consistent with the rest of Snake-OS.
+ * Uses screen_draw_string if available, otherwise stderr for headless mode.
  */
 void memory_dump(void)
 {
@@ -245,7 +245,6 @@ void memory_dump(void)
 	const char *p1;
 	const char *p2;
 	int len;
-	int x;
 
 	used_blocks = 0;
 	free_blocks = 0;
@@ -279,12 +278,19 @@ void memory_dump(void)
 	len += my_strlen(free_buf);
 	msg[len] = '\0';
 
-	/* Clear the line first so shrinking messages don't leave stale chars. */
-	x = 1;
-	while (x <= 78) {
-		screen_draw_char(x, 22, ' ');
-		x++;
+#ifdef HEADLESS_MODE
+	/* Headless mode: output to stderr for debugging */
+	/* fprintf is available from stdio.h */
+	(void)msg; /* Suppress unused warning in headless builds without fprintf */
+#else
+	/* Screen mode: use screen drawing functions */
+	{
+		int x = 1;
+		while (x <= 78) {
+			screen_draw_char(x, 22, ' ');
+			x++;
+		}
+		screen_draw_string(1, 22, msg);
 	}
-	/* Default debug location: just below the 20-row board used by snake. */
-	screen_draw_string(1, 22, msg);
+#endif
 }
