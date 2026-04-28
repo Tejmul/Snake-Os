@@ -188,13 +188,14 @@ const CHDEFS=[
   {type:"fog_of_war",name:"FOG OF WAR",dur:16,diff:2},
   {type:"mirror_snake",name:"DOPPELGANGER",dur:16,diff:3},
 ];
-const VMAP={
-  left:"LEFT","go left":"LEFT","turn left":"LEFT",
-  right:"RIGHT","go right":"RIGHT","turn right":"RIGHT",
-  up:"UP","go up":"UP","turn up":"UP",down:"DOWN","go down":"DOWN","turn down":"DOWN",
-  stop:"PAUSE",pause:"PAUSE",resume:"RESUME",
-  challenge:"CHALLENGE","challenge mode":"CHALLENGE"
-};
+// Sorted longest-first so multi-word phrases match before single-word substrings
+const VMAP_ENTRIES=[
+  ["challenge mode","CHALLENGE"],["turn left","LEFT"],["turn right","RIGHT"],
+  ["turn up","UP"],["turn down","DOWN"],["go left","LEFT"],["go right","RIGHT"],
+  ["go up","UP"],["go down","DOWN"],
+  ["left","LEFT"],["right","RIGHT"],["up","UP"],["down","DOWN"],
+  ["stop","PAUSE"],["pause","PAUSE"],["resume","RESUME"],["challenge","CHALLENGE"]
+];
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    2. GAME ENGINE
@@ -534,20 +535,30 @@ function GameOver({st,onRestart,onMenu}){
 function useVoice(active,onCmd){
   const[vs,setVs]=useState({listening:false,lastCommand:null});
   const recRef=useRef(null),toRef=useRef(null);
+  const onCmdRef=useRef(onCmd);
+  useEffect(()=>{onCmdRef.current=onCmd;},[onCmd]);
   useEffect(()=>{
-    if(!active){try{recRef.current?.stop();}catch{}recRef.current=null;return;}
-    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return;
-    const r=new SR();r.continuous=true;r.interimResults=true;r.lang="en-US";recRef.current=r;
+    if(!active){try{recRef.current?.stop();}catch{}recRef.current=null;
+      setVs({listening:false,lastCommand:null});return;}
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){console.warn("SpeechRecognition not supported");return;}
+    const r=new SR();r.continuous=true;r.interimResults=false;r.lang="en-US";
+    r.maxAlternatives=3;recRef.current=r;
     r.onresult=(ev)=>{for(let i=ev.resultIndex;i<ev.results.length;i++){
+      if(!ev.results[i].isFinal)continue;
       const t=ev.results[i][0].transcript.trim().toLowerCase();
-      for(const[ph,cm]of Object.entries(VMAP)){if(t.includes(ph)){
-        onCmd(cm);setVs({listening:true,lastCommand:cm});
+      for(const[ph,cm]of VMAP_ENTRIES){if(t.includes(ph)){
+        onCmdRef.current(cm);setVs({listening:true,lastCommand:cm});
         if(toRef.current)clearTimeout(toRef.current);
         toRef.current=setTimeout(()=>setVs(s=>({...s,lastCommand:null})),1400);break;}}}};
-    r.onerror=()=>setTimeout(()=>{try{r.start();}catch{}},400);
-    r.onend=()=>{if(active)setTimeout(()=>{try{r.start();}catch{}},80);};
-    try{r.start();}catch{}setVs({listening:true,lastCommand:null});
-    return()=>{try{r.stop();}catch{}if(toRef.current)clearTimeout(toRef.current);};
+    r.onerror=(ev)=>{if(ev.error==="not-allowed"||ev.error==="service-not-allowed")return;
+      setTimeout(()=>{try{recRef.current?.start();}catch{}},500);};
+    r.onend=()=>{if(active)setTimeout(()=>{try{recRef.current?.start();}catch{}},150);};
+    try{r.start();}catch(e){console.warn("Voice start failed:",e);}
+    setVs({listening:true,lastCommand:null});
+    return()=>{try{recRef.current?.stop();}catch{}
+      recRef.current=null;
+      if(toRef.current)clearTimeout(toRef.current);};
   },[active]);return vs;
 }
 
@@ -629,12 +640,13 @@ export default function AsteroidSerpent(){
 
   const{chs,ann,types,chDone}=useChallenges(chMode,running);
 
-  const vState=useVoice(inp==="voice"&&running,
+  // Voice stays active while playing (even when paused) so "resume" works
+  const vState=useVoice(inp==="voice"&&screen==="playing",
     useCallback(cmd=>{if(cmd==="PAUSE")setPaused(true);
       else if(cmd==="RESUME")setPaused(false);
       else if(cmd==="CHALLENGE")setChMode(c=>!c);
       else if(["UP","DOWN","LEFT","RIGHT"].includes(cmd))
-        if(OPP[cmd]!==nDir.current)nDir.current=cmd;},[]));
+        if(OPP[cmd]!==nDir.current)nDir.current=cmd;},[screen]));
 
   const gDir=useGesture(inp==="gesture"&&running,
     useCallback(d=>{if(OPP[d]!==nDir.current)nDir.current=d;},[]) );
