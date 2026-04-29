@@ -581,9 +581,9 @@ function Minimap({st}){const cvs=useRef();
     x.strokeStyle="rgba(0,229,255,.15)";x.lineWidth=1;x.strokeRect(0,0,130,130);
     if(st.sn)st.sn.forEach((seg,i)=>{const r=st.sn.length>1?i/(st.sn.length-1):0;
       x.fillStyle=i===0?"#39ff14":`rgb(20,${Math.round(255-r*180)},20)`;
-      x.fillRect(seg.x*s,(G-1-seg.y)*s,Math.max(s,2),Math.max(s,2));});
+      x.fillRect(seg.x*s,seg.y*s,Math.max(s,2),Math.max(s,2));});
     if(st.food){x.fillStyle=FOOD[st.food.type]?.color||"#ff6a00";
-      x.fillRect(st.food.x*s,(G-1-st.food.y)*s,Math.max(s,3),Math.max(s,3));}
+      x.fillRect(st.food.x*s,st.food.y*s,Math.max(s,3),Math.max(s,3));}
   },[st]);
   return<div className="mmap"><canvas ref={cvs}/></div>;
 }
