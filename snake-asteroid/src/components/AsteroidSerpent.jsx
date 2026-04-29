@@ -173,13 +173,13 @@ body{background:var(--void);overflow:hidden;font-family:'Rajdhani',sans-serif;co
 .pause-txt{font-family:'Orbitron',monospace;font-size:44px;font-weight:900;
   color:var(--cyan);text-shadow:0 0 30px rgba(0,229,255,.4);letter-spacing:8px}
 
-.back-btn{position:fixed;bottom:20px;left:20px;z-index:50;padding:12px 24px;
+.back-btn{position:fixed;bottom:20px;right:20px;z-index:50;padding:12px 24px;
   font-family:'Orbitron',monospace;font-size:14px;font-weight:700;letter-spacing:2px;
   text-transform:uppercase;border:2px solid rgba(255,255,255,0.3);
   background:rgba(0,0,0,0.5);backdrop-filter:blur(10px);color:rgba(255,255,255,0.8);
   cursor:pointer;transition:all 0.3s ease;border-radius:0}
 .back-btn:hover{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,0.1);
-  transform:translateX(-3px);box-shadow:0 0 20px rgba(0,212,255,0.3)}
+  transform:translateX(3px);box-shadow:0 0 20px rgba(0,212,255,0.3)}
 
 .scan-ov{position:fixed;inset:0;z-index:4;pointer-events:none;
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 4px);
