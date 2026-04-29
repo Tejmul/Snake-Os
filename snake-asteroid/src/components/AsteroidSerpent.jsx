@@ -752,7 +752,7 @@ export default function AsteroidSerpent({ initialChallengeMode = false, initialI
           nDir.current=cmd;
           if(USE_C_BACKEND && wsConnected) {
             const cMap={UP:'w',DOWN:'s',LEFT:'a',RIGHT:'d'};
-            sendCommand("direction", cMap[cmd]);
+            sendCommand("direction", { key: cMap[cmd] });
           }
         }
       }
