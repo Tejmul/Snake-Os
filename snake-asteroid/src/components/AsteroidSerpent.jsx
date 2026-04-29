@@ -748,8 +748,15 @@ export default function AsteroidSerpent({ initialChallengeMode = false, initialI
       else if(["UP","DOWN","LEFT","RIGHT"].includes(cmd)){
         // Ignore direction commands while paused
         if(pausedRef.current)return;
-        if(OPP[cmd]!==nDir.current)nDir.current=cmd;}
-    },[screen]));
+        if(OPP[cmd]!==nDir.current){
+          nDir.current=cmd;
+          if(USE_C_BACKEND && wsConnected) {
+            const cMap={UP:'w',DOWN:'s',LEFT:'a',RIGHT:'d'};
+            sendCommand("direction", cMap[cmd]);
+          }
+        }
+      }
+    },[screen, wsConnected, sendCommand]));
 
   const { gestureDir: gDir, gestureStatus: gStatus, gestureError: gError, gestureInfo: gInfo } =
     useGestureEngine({
