@@ -325,7 +325,7 @@ This project is part of an Operating Systems course project - Snake OS.
 
 ## 📧 Contact
 
-**Built by Tejmul** • OS Project 2026
+**Built by Tejmul , Akash , Bhavani** • OS Project 2026
 
 ---
 
