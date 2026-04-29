@@ -78,28 +78,6 @@ export default function Navbar() {
         >
           Features
         </a>
-        <a
-          href="#about"
-          className="cursor-target"
-          style={{
-            color: "rgba(255, 255, 255, 0.7)",
-            textDecoration: "none",
-            fontSize: "14px",
-            fontWeight: 600,
-            letterSpacing: "1px",
-            textTransform: "uppercase",
-            fontFamily: "'Orbitron', monospace",
-            transition: "all 0.3s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.target.style.color = "#00d4ff";
-          }}
-          onMouseLeave={(e) => {
-            e.target.style.color = "rgba(255, 255, 255, 0.7)";
-          }}
-        >
-          About
-        </a>
       </div>
     </nav>
   );

@@ -156,7 +156,9 @@ body{background:var(--void);overflow:hidden;font-family:'Rajdhani',sans-serif;co
   color:var(--dim);text-transform:uppercase}
 .go-sv{font-family:'Orbitron',monospace;font-size:22px;font-weight:700;
   color:var(--gold);text-shadow:0 0 12px rgba(255,214,0,.35)}
-.go-btns{margin-top:36px;display:flex;gap:14px}
+.go-btns{margin-top:36px;display:flex;gap:14px;justify-content:center}
+.go-exit-btn{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
+  margin-top:30px}
 
 .ann{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:60;
   font-family:'Orbitron',monospace;font-size:clamp(22px,3.5vw,44px);font-weight:900;
@@ -629,8 +631,9 @@ function GameOver({st,onRestart,onExit}){
     </div>
     <div className="go-btns">
       <button className="hb go" onClick={onRestart}>▶ PLAY AGAIN</button>
-      {onExit&&<button className="hb inp" onClick={onExit}>◀ HOME</button>}
-    </div></div>;
+    </div>
+    {onExit&&<button className="hb inp go-exit-btn" onClick={onExit}>◀ HOME</button>}
+  </div>;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════

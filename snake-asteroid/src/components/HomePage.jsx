@@ -371,9 +371,12 @@ export default function HomePage({
 
             <button
               className="cursor-target"
-              onClick={() =>
-                onSetInputMode(inputMode === "keyboard" ? "gamepad" : "keyboard")
-              }
+              onClick={() => {
+                const modes = ["keyboard", "gesture", "voice"];
+                const currentIndex = modes.indexOf(inputMode);
+                const nextIndex = (currentIndex + 1) % modes.length;
+                onSetInputMode(modes[nextIndex]);
+              }}
               style={{
                 padding: "18px 60px",
                 fontSize: "16px",
@@ -399,8 +402,9 @@ export default function HomePage({
                 e.target.style.transform = "translateX(0)";
               }}
             >
-              {inputMode === "keyboard" ? "⌨" : "🎮"} INPUT:{" "}
-              {inputMode.toUpperCase()}
+              {inputMode === "keyboard" && "⌨ INPUT: KEYBOARD"}
+              {inputMode === "gesture" && "👋 INPUT: GESTURE"}
+              {inputMode === "voice" && "🎤 INPUT: VOICE"}
             </button>
 
             <button
