@@ -805,16 +805,19 @@ export default function AsteroidSerpent({ initialChallengeMode = false, initialI
         sn: snakeArray,
         dir: cState.dir || "RIGHT",
         food: { x: cState.food.x, y: cState.food.y, type: ["normal","golden","speed","shrink"][cState.food.type] || "normal", pts: cState.food.pts },
-        sc: cState.score,
-        len: cState.length,
-        spd: cState.speed,
-        combo: cState.combo,
-        mxCombo: cState.maxCombo,
-        eaten: cState.eaten,
-        alive: cState.alive
+        sc: cState.score !== undefined ? cState.score : prev.sc,
+        len: cState.length !== undefined ? cState.length : prev.len,
+        spd: cState.speed !== undefined ? cState.speed : prev.spd,
+        combo: cState.combo !== undefined ? cState.combo : prev.combo,
+        mxCombo: cState.maxCombo !== undefined ? cState.maxCombo : prev.mxCombo,
+        eaten: cState.eaten !== undefined ? cState.eaten : prev.eaten,
+        alive: cState.alive !== undefined ? cState.alive : prev.alive,
+        timeAlive: prev.timeAlive ? prev.timeAlive : ((!cState.alive && prev.alive) ? (Date.now() - t0.current) / 1000 : (Date.now() - t0.current) / 1000)
       }));
       
       if (!cState.alive) {
+        console.log("💀 SNAKE DIED! cState:", cState);
+        console.log("💀 SNAKE DIED! gs to be set with sc:", cState.score);
         setTimeout(() => setScreen("gameover"), 700);
       }
     }
@@ -888,9 +891,12 @@ export default function AsteroidSerpent({ initialChallengeMode = false, initialI
       backend={USE_C_BACKEND?"C":"JS"} wsConnected={wsConnected}/>}
     {ann&&<div className="ann">⚠ {ann}</div>}
     {screen==="playing"&&paused&&<div className="pause-ov"><div className="pause-txt">PAUSED</div></div>}
-    {screen==="playing"&&onExit&&<button className="back-btn" onClick={onExit}>◀ EXIT</button>}
-    {screen==="gameover"&&<GameOver st={{...gs,chDone}}
-      onRestart={startGame} onExit={onExit}/>}
+    {screen==="menu"&&<Home onStart={startGame} chMode={chMode}
+      onToggleCh={()=>setChMode(c=>!c)} inp={inp} onSetInp={setInp}/>}
+    {screen==="gameover"&&(() => {
+      console.log("📺 RENDERING GAMEOVER! gs:", gs);
+      return <GameOver st={{...gs,chDone}} onRestart={startGame} onMenu={()=>setScreen("menu")} />;
+    })()}
     {typeof window!=="undefined"&&"ontouchstart"in window&&screen==="playing"&&
       <div className="dpad">
         <div className="dp u" onTouchStart={()=>{nDir.current="UP";}}>↑</div>
